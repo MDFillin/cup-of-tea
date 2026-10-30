@@ -3,9 +3,14 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$Destination = (Join-Path $PSScriptRoot '..\cores')
+    [string]$Destination
 )
 $ErrorActionPreference = 'Stop'
+# При запуске через powershell -File значение по умолчанию из $PSScriptRoot бывает пустым.
+if (-not $Destination) {
+    $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+    $Destination = Join-Path $scriptDir '..\cores'
+}
 $ProgressPreference = 'SilentlyContinue'
 
 $cores = @(

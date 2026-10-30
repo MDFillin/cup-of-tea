@@ -10,7 +10,7 @@ public sealed record ImportError(int Line, string Message);
 
 public sealed record ImportResult(IReadOnlyList<Profile> Profiles, IReadOnlyList<ImportError> Errors);
 
-/// <summary>Разбор ссылок vless:// и hy2:// (<server-link-removed></summary>
+/// <summary>Разбор ссылок vless:// и hy2:// (hysteria2:// — то же самое).</summary>
 public static partial class LinkParser
 {
     [GeneratedRegex(@"(?:vless|hy2|hysteria2)://\S+", RegexOptions.IgnoreCase)]

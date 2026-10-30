@@ -4,9 +4,12 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$Out = (Join-Path $PSScriptRoot '..\out\TempestVPN')
+    [string]$Out
 )
 $ErrorActionPreference = 'Stop'
+# При запуске через powershell -File значение по умолчанию из $PSScriptRoot бывает пустым.
+if (-not $PSScriptRoot) { $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
+if (-not $Out) { $Out = Join-Path $PSScriptRoot '..\out\TempestVPN' }
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $cores = Join-Path $root 'cores'
 if (-not (Test-Path (Join-Path $cores 'xray.exe'))) { & (Join-Path $PSScriptRoot 'fetch-cores.ps1') }

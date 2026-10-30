@@ -103,7 +103,7 @@ public sealed record IpcRequest
 {
     public required string Command { get; init; }
 
-    /// <summary>Ссылка сервера (vless:// или <server-link-removed> Служба разбирает её сама и строит конфиги сама.</summary>
+    /// <summary>Ссылка сервера (vless:// или hy2://). Служба разбирает её сама и строит конфиги сама.</summary>
     public string? Link { get; init; }
     public ConnectOptions? Options { get; init; }
 

@@ -67,7 +67,7 @@ public class ConvenienceTests
     public void DiagnosticsHaveNoSecrets()
     {
         var data = new ProfileData();
-        var sub = new Subscription { Name = "panel", Url = "<subscription-url-removed>" };
+        var sub = new Subscription { Name = "panel", Url = "https://panel.example/sub/t0kenSECRET" };
         data.Apply(sub, SubscriptionClient.Parse(string.Join("\n", LinkParserTests.XhttpLink, LinkParserTests.Hy2Link), _ => null), DateTimeOffset.Now);
 
         var path = Path.Combine(Path.GetTempPath(), $"pvpn-diag-{Guid.NewGuid():N}.zip");
@@ -83,7 +83,7 @@ public class ConvenienceTests
             var all = string.Join("\n", zip.Entries.Select(e => new StreamReader(e.Open()).ReadToEnd()));
             Assert.Contains("my-hy2", all);
             Assert.Contains("panel.example", all);
-            Assert.Contains("<server-link-removed>", all);
+            Assert.Contains("hy2://***", all);
             foreach (var secret in new[] { "s3cret-pass", LinkParserTests.Uuid, "t0kenSECRET", LinkParserTests.Pin })
                 Assert.DoesNotContain(secret, all);
         }

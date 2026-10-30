@@ -13,7 +13,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 $dir = 'C:\PVpnSetup\sub'
-$url = '<subscription-url-removed>'
+$url = 'http://127.0.0.1:18080/sub/test-token'
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
 $cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
 $failures = 0
@@ -69,7 +69,7 @@ $c = (Guest -AsUser -TimeoutSec 150 "$cli svc connect sub-my-xhttp --test 300; $
 Result 'sub-my-xhttp' ($c -match 'Состояние: Connected' -and $c -match "внешний IP: $([regex]::Escape($VpnIp))") (($c -split "`n" | Select-String 'Состояние|внешний IP') -join ' ')
 
 Step 'Обновление: sub-my-hy2 пропал, добавился сервер; обновление при включённом VPN'
-Body -Skip 'my-hy2' -Extra '<server-link-removed>' | ForEach-Object { "  $_" }
+Body -Skip 'my-hy2' -Extra 'hy2://extra-pass@203.0.113.11:443?sni=www.example.com#sub-extra' | ForEach-Object { "  $_" }
 $out = PvpnCli 'sub update sub-test'
 Result 'обновлена' ($out -match 'новых 1' -and $out -match 'удалено 1' -and $out -match 'EXIT=0') ($out -replace '\s+', ' ')
 $servers = PvpnCli 'list'

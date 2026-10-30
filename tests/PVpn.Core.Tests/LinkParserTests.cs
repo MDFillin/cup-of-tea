@@ -10,12 +10,12 @@ public class LinkParserTests
     internal const string Pin = "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99";
 
     internal const string XhttpLink =
-        $"<server-link-removed>";
+        $"vless://{Uuid}@203.0.113.10:443?encryption=none&security=reality&sni=www.example.nl&fp=chrome&pbk={Pbk}&sid=0123abcd&type=xhttp&path=%2Fdeadbeef&mode=auto#my-xhttp";
 
     internal const string VisionLink =
-        $"<server-link-removed>";
+        $"vless://{Uuid}@203.0.113.10:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.example.nl&fp=chrome&pbk={Pbk}&sid=0123abcd&type=tcp&headerType=none#my-vision";
 
-    internal const string Hy2Link = $"<server-link-removed>";
+    internal const string Hy2Link = $"hy2://my:s3cret-pass@203.0.113.10:443?sni=www.example.nl&insecure=1&pinSHA256={Pin}#my-hy2";
 
     [Fact]
     public void ParsesXhttpReality()
@@ -63,7 +63,7 @@ public class LinkParserTests
     public void AcceptsHysteria2SchemeAndPinWithoutColons()
     {
         var pin = Pin.Replace(":", "").ToLowerInvariant();
-        var p = Assert.IsType<Hysteria2Profile>(LinkParser.Parse($"<server-link-removed>"));
+        var p = Assert.IsType<Hysteria2Profile>(LinkParser.Parse($"hysteria2://pass@203.0.113.10:443?pinSHA256={pin}#x"));
         Assert.Equal("pass", p.Auth);
         Assert.False(p.Insecure);
         Assert.Equal(pin, p.PinSha256);
@@ -72,7 +72,7 @@ public class LinkParserTests
     [Fact]
     public void DecodesCyrillicNameAndIpv6Host()
     {
-        var link = $"<server-link-removed>";
+        var link = $"vless://{Uuid}@[2001:db8::1]:443?security=none#%D0%AF-%D0%B4%D0%BE%D0%BC";
         var p = LinkParser.Parse(link);
         Assert.Equal("Я-дом", p.Name);
         Assert.Equal("2001:db8::1", p.Host);
@@ -81,23 +81,23 @@ public class LinkParserTests
     [Fact]
     public void DefaultsNameToHostAndPort()
     {
-        var p = LinkParser.Parse($"<server-link-removed>");
+        var p = LinkParser.Parse($"vless://{Uuid}@203.0.113.10:443?security=none");
         Assert.Equal("203.0.113.10:443", p.Name);
     }
 
     [Theory]
-    [InlineData($"<server-link-removed>", "ws")]
-    [InlineData($"<server-link-removed>", "pbk")]
-    [InlineData($"<server-link-removed>", "sni")]
-    [InlineData($"<server-link-removed>", "порт")]
-    [InlineData($"<server-link-removed>", "UUID")]
-    [InlineData("<server-link-removed>", "pinSHA256")]
-    [InlineData("<server-link-removed>", "Обфускация")]
-    [InlineData("<server-link-removed>", "mport")]
-    [InlineData("<server-link-removed>", "порт")]
-    [InlineData($"<server-link-removed>", "только у hy2")]
-    [InlineData("<server-link-removed>", "SHA-256")]
-    [InlineData("<server-link-removed>", "Неизвестный")]
+    [InlineData($"vless://{Uuid}@203.0.113.10:443?type=ws&security=none#x", "ws")]
+    [InlineData($"vless://{Uuid}@203.0.113.10:443?security=reality&sni=www.example.nl#x", "pbk")]
+    [InlineData($"vless://{Uuid}@203.0.113.10:443?security=reality&pbk={Pbk}#x", "sni")]
+    [InlineData($"vless://{Uuid}@203.0.113.10?security=none#x", "порт")]
+    [InlineData("vless://203.0.113.10:443?security=none#x", "UUID")]
+    [InlineData("hy2://pass@203.0.113.10:443?insecure=1#x", "pinSHA256")]
+    [InlineData("hy2://pass@203.0.113.10:443?obfs=salamander#x", "Обфускация")]
+    [InlineData("hy2://pass@203.0.113.10:443?mport=abc#x", "mport")]
+    [InlineData("hy2://pass@203.0.113.10:abc#x", "порт")]
+    [InlineData($"vless://{Uuid}@203.0.113.10:443,8443?security=none#x", "только у hy2")]
+    [InlineData("hy2://pass@203.0.113.10:443?pinSHA256=1234#x", "SHA-256")]
+    [InlineData("trojan://pass@203.0.113.10:443#x", "Неизвестный")]
     public void RejectsUnsupportedLinks(string link, string expectedInMessage)
     {
         var e = Assert.Throws<LinkParseException>(() => LinkParser.Parse(link));
@@ -112,7 +112,7 @@ public class LinkParserTests
             my-xhttp: {XhttpLink}
             {VisionLink}   {Hy2Link}
 
-            сломанная: <server-link-removed>
+            сломанная: vless://broken
             """;
         var result = LinkParser.ParseMany(text);
         Assert.Equal(["my-xhttp", "my-vision", "my-hy2"], result.Profiles.Select(p => p.Name));
@@ -129,12 +129,12 @@ public class LinkParserTests
     }
 
     [Theory]
-    [InlineData("<server-link-removed>", 20000, "20000-30000")]
-    [InlineData("<server-link-removed>", 443, "443,20000-30000")]
-    [InlineData("<server-link-removed>", 443, "20000-30000")]
-    [InlineData("<server-link-removed>", 443, "20000-30000")]
-    [InlineData("<server-link-removed>", 5000, "5000-5010")]
-    [InlineData("<server-link-removed>", 443, null)]
+    [InlineData("hy2://pass@203.0.113.10:20000-30000?sni=www.example.nl#x", 20000, "20000-30000")]
+    [InlineData("hy2://pass@203.0.113.10:443,20000-30000#x", 443, "443,20000-30000")]
+    [InlineData("hy2://pass@203.0.113.10:443?mport=20000-30000#x", 443, "20000-30000")]
+    [InlineData("hy2://pass@203.0.113.10:443?mport=20000:30000#x", 443, "20000-30000")]
+    [InlineData("hysteria2://pass@203.0.113.10:5000-5010#x", 5000, "5000-5010")]
+    [InlineData("hy2://pass@203.0.113.10:443?mport=443#x", 443, null)]
     public void ParsesHysteria2PortHopping(string link, int port, string? hop)
     {
         var p = Assert.IsType<Hysteria2Profile>(LinkParser.Parse(link));

@@ -361,9 +361,9 @@ public static class CoreSelfTest
 
     private static readonly string[] Links =
     [
-        $"<server-link-removed>",
-        $"<server-link-removed>",
-        $"<server-link-removed>",
+        $"vless://{Uuid}@203.0.113.10:443?encryption=none&security=reality&sni=www.example.com&fp=chrome&pbk={Pbk}&sid=0123abcd&type=xhttp&path=%2Fself-test&mode=auto#self-xhttp",
+        $"vless://{Uuid}@203.0.113.10:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.example.com&fp=chrome&pbk={Pbk}&sid=0123abcd&type=tcp#self-vision",
+        $"hy2://self-test@203.0.113.10:443,20000-30000?sni=www.example.com&pinSHA256={Pin}#self-hy2",
     ];
 
     /// <summary>null — ядро приняло все конфиги, иначе — что не так.</summary>

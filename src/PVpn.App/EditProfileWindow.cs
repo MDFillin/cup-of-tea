@@ -40,7 +40,7 @@ internal sealed class EditProfileWindow : Window
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock { Text = "Имя" });
         panel.Children.Add(nameBox);
-        panel.Children.Add(new TextBlock { Text = "Ссылка (vless:// или <server-link-removed> — например, после смены ключа на сервере" });
+        panel.Children.Add(new TextBlock { Text = "Ссылка (vless:// или hy2://) — например, после смены ключа на сервере" });
         panel.Children.Add(linkBox);
         if (fromSubscription)
         {

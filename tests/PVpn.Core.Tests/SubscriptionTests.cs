@@ -7,7 +7,7 @@ namespace PVpn.Core.Tests;
 public class SubscriptionTests
 {
     private static readonly string Body = string.Join("\n", LinkParserTests.XhttpLink, LinkParserTests.VisionLink, LinkParserTests.Hy2Link,
-        "<server-link-removed>", "<server-link-removed>");
+        "vmess://eyJhZGQiOiIyMDMuMC4xMTMuMTAifQ==", "trojan://pass@203.0.113.10:443#t");
 
     private static string Rename(string link, string name) => link[..link.IndexOf('#')] + "#" + Uri.EscapeDataString(name);
 
@@ -55,7 +55,7 @@ public class SubscriptionTests
 
     [Theory]
     [InlineData("<!DOCTYPE html><html>…</html>", "веб-страница")]
-    [InlineData("<server-link-removed>", "другие протоколы")]
+    [InlineData("vmess://eyJhZGQiOiIyMDMuMC4xMTMuMTAifQ==", "другие протоколы")]
     [InlineData("", "не нашлось")]
     public void RejectsBodiesWithoutServers(string body, string message)
     {
@@ -75,7 +75,7 @@ public class SubscriptionTests
         var data = new ProfileData();
         var manual = LinkParser.Parse(Rename(LinkParserTests.Hy2Link, "manual"));
         data.Profiles.Add(manual);
-        var sub = new Subscription { Name = "panel", Url = "<subscription-url-removed>" };
+        var sub = new Subscription { Name = "panel", Url = "https://panel.example/sub/abc123" };
 
         var first = data.Apply(sub, Fetch(Rename(LinkParserTests.XhttpLink, "a"), Rename(LinkParserTests.VisionLink, "b"),
             Rename(LinkParserTests.Hy2Link, "b")), DateTimeOffset.Now);
@@ -133,12 +133,12 @@ public class SubscriptionTests
         http.DefaultRequestHeaders.UserAgent.ParseAdd("v2rayN/7.10");
         var data = new ProfileData();
 
-        var added = await SubscriptionService.AddAsync(data, http, "<subscription-url-removed>", null);
+        var added = await SubscriptionService.AddAsync(data, http, "https://panel.example/sub/abc123", null);
         Assert.Equal("Панель", added.Subscription.Name);
         Assert.Equal(3, added.Added);
         Assert.Equal(100, added.Subscription.Total);
         Assert.StartsWith("v2rayN", agent);
-        await Assert.ThrowsAsync<SubscriptionException>(() => SubscriptionService.AddAsync(data, http, "<subscription-url-removed>", null));
+        await Assert.ThrowsAsync<SubscriptionException>(() => SubscriptionService.AddAsync(data, http, "https://panel.example/sub/abc123", null));
 
         using var broken = new HttpClient(new FakeHandler(HttpStatusCode.Forbidden, ""));
         var e = await Assert.ThrowsAsync<SubscriptionException>(() => SubscriptionService.UpdateAsync(data, broken, data.Subscriptions[0]));
@@ -156,10 +156,10 @@ public class SubscriptionTests
         {
             var store = new ProfileStore(path);
             var data = new ProfileData();
-            data.Apply(new Subscription { Name = "panel", Url = "<subscription-url-removed>" }, Fetch(LinkParserTests.Hy2Link), DateTimeOffset.Now);
+            data.Apply(new Subscription { Name = "panel", Url = "https://panel.example/sub/abc123" }, Fetch(LinkParserTests.Hy2Link), DateTimeOffset.Now);
             store.Save(data);
             var back = store.Load();
-            Assert.Equal("<subscription-url-removed>", Assert.Single(back.Subscriptions).Url);
+            Assert.Equal("https://panel.example/sub/abc123", Assert.Single(back.Subscriptions).Url);
             Assert.Equal(back.Subscriptions[0].Id, Assert.Single(back.Profiles).SubscriptionId);
         }
         finally
