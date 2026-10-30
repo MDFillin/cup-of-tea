@@ -962,9 +962,9 @@
                                 <StackPanel MaxWidth="760" HorizontalAlignment="Left"
                                             Visibility="{Binding SettingsPage, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=tun}">
                                     <TextBlock Text="Режим TUN, действует со следующего подключения." Style="{StaticResource Sub}" FontSize="14" Margin="0,0,0,14" />
-                                    <ui:ToggleSwitch Content="Блокировать QUIC" IsChecked="{Binding BlockQuic}" />
+                                    <ui:ToggleSwitch Content="Блокировать QUIC для VLESS" IsChecked="{Binding BlockQuic}" />
                                     <TextBlock Style="{StaticResource Hint}" Margin="48,2,0,18"
-                                               Text="Браузеры сразу переходят на TCP, который быстрее и стабильнее идёт через XHTTP и Vision. Действует для всех серверов: так смена сервера не перезапускает TUN." />
+                                               Text="Для XHTTP и Vision: браузеры сразу переходят на TCP, который через них идёт быстрее и стабильнее. У Hysteria2 QUIC не режется — она сама работает по UDP." />
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="MTU туннеля" VerticalAlignment="Center" Width="130" />
                                         <TextBox Text="{Binding MtuText, UpdateSourceTrigger=PropertyChanged}" Width="110" />

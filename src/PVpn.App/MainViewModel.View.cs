@@ -23,8 +23,6 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private void OpenSettings(string? name) => SettingsPage = name;
 
-    partial void OnPageChanged(int value) => SettingsPage = null;
-
     // ───────────── Главная ─────────────
 
     private DateTimeOffset? sessionSince;

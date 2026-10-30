@@ -49,6 +49,13 @@ public static class SingBoxConfigBuilder
     public const string TunAddress4 = "172.18.79.1/30";
     public const string TunAddress6 = "fdfe:dcba:7979::1/126";
 
+    /// <summary>
+    /// QUIC режется только у серверов поверх TCP (VLESS): там UDP идёт внутри TCP-соединения и тормозит, браузеру
+    /// лучше сразу уйти на TCP. Hysteria2 сама работает по UDP и пропускает QUIC без потерь — резать его незачем:
+    /// браузер ждал бы ответа на QUIC, и первый заход на каждый сайт тянулся бы секунды.
+    /// </summary>
+    public static bool BlocksQuic(Profiles.Profile server, bool setting) => setting && server.Transport == Profiles.ServerTransport.Tcp;
+
     public static JsonObject Build(SingBoxOptions o)
     {
         if (o.ServerAddresses.Count == 0)
@@ -75,11 +82,15 @@ public static class SingBoxConfigBuilder
         rules.Add(new JsonObject { ["ip_version"] = 6, ["action"] = "reject" });
         // QUIC режем только у трафика, который идёт через VPN (в режиме «только выбранное» — в AddSplitRules).
         if (o.BlockQuic && !onlySelected)
-            rules.Add(new JsonObject { ["network"] = "udp", ["port"] = 443, ["action"] = "reject" });
+            rules.Add(QuicReject(new JsonObject()));
 
         var dnsServers = new JsonArray();
         AddDohServer(dnsServers, o.Dns, "remote", "proxy");
         var dnsRules = new JsonArray();
+        // По записи HTTPS (тип 65) Chrome узнаёт о QUIC ещё до первого запроса и пробует его первым. Раз QUIC
+        // отклоняется, такие записи не отдаём: браузер сразу идёт по TCP, а не ждёт ответа на QUIC.
+        if (o.BlockQuic)
+            dnsRules.Add(new JsonObject { ["query_type"] = new JsonArray("HTTPS"), ["action"] = "predefined", ["rcode"] = "NOERROR" });
         if (split != null)
         {
             // DNS-сервер без detour ходит напрямую (через физический адаптер, auto_detect_interface).
@@ -191,6 +202,19 @@ public static class SingBoxConfigBuilder
     }
 
     /// <summary>
+    /// Отказ для QUIC (UDP 443). Без no_drop sing-box после 50 отказов за 30 с сам переходит на «молча выбрасывать»,
+    /// а одна страница YouTube даёт столько попыток QUIC легко — и браузер снова ждёт секунды.
+    /// </summary>
+    private static JsonObject QuicReject(JsonObject rule)
+    {
+        rule["network"] = "udp";
+        rule["port"] = 443;
+        rule["action"] = "reject";
+        rule["no_drop"] = true;
+        return rule;
+    }
+
+    /// <summary>
     /// При нескольких DNS-серверах sing-box 1.14 требует явно указать, чем исходящие разрешают домены. Домены
     /// разрешает только «direct» (через VPN домен уходит в xray как есть) — значит, прямым DNS; без раздельного
     /// туннелирования доменов у «direct» нет, и годится любой сервер.
@@ -219,13 +243,7 @@ public static class SingBoxConfigBuilder
             if (blockQuic)
             {
                 foreach (var m in matchers)
-                {
-                    var quic = (JsonObject)m.DeepClone();
-                    quic["network"] = "udp";
-                    quic["port"] = 443;
-                    quic["action"] = "reject";
-                    rules.Add(quic);
-                }
+                    rules.Add(QuicReject((JsonObject)m.DeepClone()));
             }
             foreach (var m in matchers)
             {

@@ -137,6 +137,9 @@ public sealed record ServiceStatus
     public DateTimeOffset? Since { get; init; }
     public string? PhysicalInterface { get; init; }
     public string? PublicIp { get; init; }
+
+    /// <summary>Проверка внешнего IP после подключения закончилась (PublicIp null — не удалось узнать).</summary>
+    public bool PublicIpChecked { get; init; }
     public int? DelayMs { get; init; }
     public bool KillSwitchActive { get; init; }
 

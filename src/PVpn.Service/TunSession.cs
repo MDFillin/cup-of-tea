@@ -54,14 +54,37 @@ internal sealed class TunSession
     /// <summary>Задержка проверки связи при подключении (служба сразу показывает её как пинг).</summary>
     public int? DelayMs { get; private set; }
 
+    /// <summary>Таймаут одной проверки связи сторожем.</summary>
+    public static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(8);
+
+    private HttpClient? probe;
+
+    /// <summary>
+    /// Проверка связи через xray одним запросом. Клиент живёт, пока живёт xray: соединение через туннель
+    /// переиспользуется, и проверка не нагружает канал рукопожатиями.
+    /// </summary>
+    public Task<DelayResult> ProbeAsync(CancellationToken ct)
+    {
+        probe ??= DelayTester.CreateSocksClient(SocksPort, ProbeTimeout, SocksCredential);
+        return DelayTester.ProbeAsync(probe, ct);
+    }
+
+    private void ResetProbe()
+    {
+        probe?.Dispose();
+        probe = null;
+    }
+
     /// <summary>
     /// Настройки, от которых зависит sing-box (TUN, DNS, правила). Если у нового подключения они те же,
     /// сервер меняется перезапуском одного xray — без пересоздания адаптера TUN.
     /// </summary>
-    public bool CanSwitchTo(ConnectOptions next) => SingBoxKey(options) == SingBoxKey(next);
+    public bool CanSwitchTo(Profile nextProfile, ConnectOptions next) => SingBoxKey(Profile, options) == SingBoxKey(nextProfile, next);
 
-    private static string SingBoxKey(ConnectOptions o) => System.Text.Json.JsonSerializer.Serialize(
-        o with { Bypass = null, TestSeconds = 0, IgnoreConflicts = false }, IpcJsonContext.Default.ConnectOptions);
+    private static string SingBoxKey(Profile p, ConnectOptions o) => System.Text.Json.JsonSerializer.Serialize(
+        o with { Bypass = null, TestSeconds = 0, IgnoreConflicts = false, BlockQuic = BlocksQuic(p, o) }, IpcJsonContext.Default.ConnectOptions);
+
+    private static bool BlocksQuic(Profile p, ConnectOptions o) => SingBoxConfigBuilder.BlocksQuic(p, o.BlockQuic);
 
     public static async Task<TunSession> StartAsync(Profile profile, ConnectOptions options, CorePaths cores, ServiceLog log,
         Action<string> progress, CancellationToken ct)
@@ -135,8 +158,17 @@ internal sealed class TunSession
         DelayResult probe = new(null, "нет попыток");
         for (var attempt = 1; attempt <= 3 && !probe.Ok; attempt++)
         {
-            probe = await DelayTester.HttpDelayViaSocksAsync(SocksPort, TimeSpan.FromSeconds(10), ct, SocksCredential).ConfigureAwait(false);
-            if (!probe.Ok)
+            // Через тот же клиент, что и сторож: соединение остаётся прогретым, и первая проверка сторожа
+            // не тратит время на рукопожатия (на нестабильном XHTTP это давало бы ложное «не отвечает»).
+            probe = await ProbeAsync(ct).ConfigureAwait(false);
+            if (probe.Ok)
+            {
+                // Первый запрос включает установку соединения; задержку показываем по второму.
+                var warm = await ProbeAsync(ct).ConfigureAwait(false);
+                if (warm.Ok)
+                    probe = warm;
+            }
+            else
                 log.Info($"Проверка связи, попытка {attempt}: {probe.Error}");
         }
         if (!probe.Ok)
@@ -178,6 +210,8 @@ internal sealed class TunSession
 
     private async Task StartXrayAsync(CancellationToken ct)
     {
+        // Соединения прежнего xray мертвы — проверки пойдут через новый.
+        ResetProbe();
         var config = XrayConfigBuilder.Build(Profile, new XrayOptions
         {
             Mode = XrayMode.TunBackend,
@@ -206,10 +240,9 @@ internal sealed class TunSession
             InterfaceName = InterfaceName,
             Mtu = options.Mtu,
             Stack = options.Stack ?? "gvisor",
-            // QUIC отклоняет sing-box (браузер сразу уходит на TCP; xray пакеты молча выбрасывал бы, и первый заход
-            // на сайт ждал бы секунды). Для любого сервера, а не только VLESS: тогда конфиг sing-box не зависит
-            // от сервера, и смена сервера не пересоздаёт TUN.
-            BlockQuic = options.BlockQuic,
+            // QUIC отклоняет sing-box (xray пакеты молча выбрасывал бы). Смена сервера без пересоздания TUN — внутри
+            // одного вида транспорта (VLESS ↔ VLESS, hy2 ↔ hy2), см. CanSwitchTo.
+            BlockQuic = BlocksQuic(Profile, options),
             DirectCidrs = NetworkInfo.GetPublicLocalSubnets(InterfaceName),
             DirectDns = AdapterDns(Physical.Index),
             SplitTunnel = options.SplitTunnel,
@@ -316,6 +349,7 @@ internal sealed class TunSession
     public async Task StopAsync(bool quick = false)
     {
         var sw = Stopwatch.StartNew();
+        ResetProbe();
         var graceful = quick ? TimeSpan.FromSeconds(1.5) : (TimeSpan?)null;
         // Ядра останавливаются одновременно: каждому даётся время на штатную остановку.
         await Task.WhenAll(
@@ -404,14 +438,22 @@ internal sealed class TunSession
                 throw new SessionException("Серверы с IPv6-адресом пока не поддерживаются в режиме TUN");
             return ip;
         }
+        // При смене сервера запрос идёт через туннель прежнего сервера — если тот не отвечает, ждать долго незачем:
+        // вызывающий тогда поднимет всё заново, и адрес разрешится напрямую.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
         try
         {
-            var addresses = await Dns.GetHostAddressesAsync(host, AddressFamily.InterNetwork, ct).ConfigureAwait(false);
+            var addresses = await Dns.GetHostAddressesAsync(host, AddressFamily.InterNetwork, timeout.Token).ConfigureAwait(false);
             return addresses.FirstOrDefault() ?? throw new SessionException($"Не удалось узнать IP сервера {host}");
         }
         catch (SocketException e)
         {
             throw new SessionException($"Не удалось узнать IP сервера {host}: {e.Message}");
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SessionException($"Не удалось узнать IP сервера {host}: DNS не ответил за 5 с");
         }
     }
 }

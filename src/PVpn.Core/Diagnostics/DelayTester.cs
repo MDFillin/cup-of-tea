@@ -97,6 +97,30 @@ public static class DelayTester
         return await MeasureAsync(client, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Один запрос generate_204 через долгоживущий клиент (см. <see cref="CreateSocksClient"/>): соединение с сайтом
+    /// через туннель переиспользуется, поэтому проверка лёгкая и показывает задержку, а не время рукопожатий.
+    /// Если туннель оборвался, оборвалось и это соединение — запрос не пройдёт.
+    /// </summary>
+    public static async Task<DelayResult> ProbeAsync(HttpClient client, CancellationToken ct = default)
+    {
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            using var response = await client.GetAsync(ProbeUrl, ct).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return new DelayResult((int)sw.ElapsedMilliseconds, null);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            return new DelayResult(null, Describe(e));
+        }
+    }
+
+    /// <summary>Клиент через SOCKS-вход xray для повторяющихся проверок (<see cref="ProbeAsync"/>).</summary>
+    public static HttpClient CreateSocksClient(int socksPort, TimeSpan timeout, NetworkCredential? credential = null) =>
+        CreateClient(socksPort, timeout, credential);
+
     /// <summary>Задержка запроса обычным путём по маршрутам системы (в TUN-режиме — через туннель).</summary>
     public static async Task<DelayResult> HttpDelayDirectAsync(TimeSpan timeout, CancellationToken ct = default)
     {
@@ -173,7 +197,8 @@ public static class DelayTester
         {
             Proxy = new WebProxy($"socks5://127.0.0.1:{socksPort}") { Credentials = credential },
             UseProxy = true,
-            PooledConnectionLifetime = TimeSpan.FromSeconds(30),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(60),
         };
         return new HttpClient(handler) { Timeout = timeout };
     }

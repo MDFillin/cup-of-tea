@@ -489,10 +489,19 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    /// <summary>Настоящая задержка: временный xray и запрос generate_204 через сервер (как у браузера).</summary>
+    /// <summary>Сколько серверов проверяется одновременно (у каждого свой временный xray).</summary>
+    private const int ParallelDelayChecks = 4;
+    private bool checkingDelays;
+
+    /// <summary>
+    /// Настоящая задержка: временный xray и запрос generate_204 через сервер (как у браузера).
+    /// Серверы проверяются по несколько сразу: по одному подписка на 20 серверов проверялась бы минуты.
+    /// </summary>
     [RelayCommand]
     private async Task CheckDelaysAsync()
     {
+        if (checkingDelays)
+            return;
         CorePaths cores;
         try
         {
@@ -503,24 +512,36 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             Notice = e.Message;
             return;
         }
-        foreach (var item in Profiles.ToList())
+        checkingDelays = true;
+        var items = Profiles.ToList();
+        foreach (var item in items)
             item.Checking = true;
-        foreach (var item in Profiles.ToList())
+        using var limit = new SemaphoreSlim(ParallelDelayChecks);
+        try
         {
-            try
+            await Task.WhenAll(items.Select(async item =>
             {
-                await using var session = await ProxySession.StartAsync(item.Profile, cores,
-                    new ProxySessionOptions { SocksPort = 0, HttpPort = -1, Bypass = settings.Bypass }, (_, _) => { });
-                item.Delay = await DelayTester.HttpDelayViaSocksAsync(session.SocksPort, TimeSpan.FromSeconds(10));
-            }
-            catch (Exception e) when (e is InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
-            {
-                item.Delay = new DelayResult(null, e.Message);
-            }
-            finally
-            {
-                item.Checking = false;
-            }
+                await limit.WaitAsync();
+                try
+                {
+                    await using var session = await ProxySession.StartAsync(item.Profile, cores,
+                        new ProxySessionOptions { SocksPort = 0, HttpPort = -1, Bypass = settings.Bypass }, (_, _) => { });
+                    item.Delay = await DelayTester.HttpDelayViaSocksAsync(session.SocksPort, TimeSpan.FromSeconds(10));
+                }
+                catch (Exception e) when (e is InvalidOperationException or IOException or System.ComponentModel.Win32Exception or ConfigException)
+                {
+                    item.Delay = new DelayResult(null, e.Message);
+                }
+                finally
+                {
+                    item.Checking = false;
+                    limit.Release();
+                }
+            }));
+        }
+        finally
+        {
+            checkingDelays = false;
         }
     }
 
@@ -794,7 +815,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         serviceMetricsPort = s.MetricsPort;
         sessionSince = s.State == SessionState.Connected ? s.Since : null;
         ConnectedServer = s.ProfileName != null ? ProfileData.PlainName(s.ProfileName) : null;
-        PublicIp = s.State == SessionState.Connected ? s.PublicIp ?? "проверяю…" : null;
+        PublicIp = s.State == SessionState.Connected ? s.PublicIp ?? (s.PublicIpChecked ? "—" : "проверяю…") : null;
         DelayText = s.State == SessionState.Connected ? (s.DelayMs is { } d ? $"{d} мс" : "—") : null;
         KillSwitchText = s.State == SessionState.Connected ? (s.KillSwitchActive ? "включён" : "выключен") : null;
         var server = ConnectedServer != null ? $"{ConnectedServer} · {s.Protocol}" : null;
@@ -889,7 +910,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 "Предупреждения: " + string.Join("; ", Warnings)),
             ["network.txt"] = DiagnosticsReport.Network(IpcConstants.TunInterfaceName),
             ["servers.txt"] = DiagnosticsReport.Servers(data),
-            ["app-log.txt"] = LogText,
+            ["app-log.txt"] = FullLog(),
         };
         try
         {
@@ -947,11 +968,30 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         TrimAndPublishLogs();
     }
 
+    /// <summary>Строки пришли, а страница журнала закрыта: текст соберём, когда её откроют.</summary>
+    private bool logDirty;
+
     private void TrimAndPublishLogs()
     {
         if (logLines.Count > MaxLogLines)
             logLines.RemoveRange(0, logLines.Count - MaxLogLines);
-        LogText = string.Join(Environment.NewLine, logLines);
+        // Собирать 3000 строк и перерисовывать их в TextBox каждые 2 с, пока журнал никто не смотрит, — зря грузить ЦП.
+        if (Page != LogPage)
+        {
+            logDirty = true;
+            return;
+        }
+        logDirty = false;
+        LogText = FullLog();
+    }
+
+    private string FullLog() => string.Join(Environment.NewLine, logLines);
+
+    partial void OnPageChanged(int value)
+    {
+        SettingsPage = null;
+        if (value == LogPage && logDirty)
+            TrimAndPublishLogs();
     }
 
     [RelayCommand]
@@ -959,7 +999,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         try
         {
-            Clipboard.SetText(LogText);
+            Clipboard.SetText(FullLog());
             Notice = "Логи скопированы в буфер обмена (ключи и пароли в них скрыты).";
         }
         catch (System.Runtime.InteropServices.ExternalException e)

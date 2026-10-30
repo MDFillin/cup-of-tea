@@ -29,6 +29,7 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     private DateTimeOffset? testDeadline;
     private ServiceStatus status = new() { State = SessionState.Disconnected, ServiceVersion = Version };
     private Timer? networkDebounce;
+    private readonly object networkLock = new();
 
     /// <summary>
     /// До этого момента «та же сеть вернулась» не проверяется: событие смены сети вызывает подъём нашего же TUN
@@ -188,10 +189,24 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
                      (options.SplitTunnel != null ? $"; раздельное туннелирование: {TunSession.Describe(options.SplitTunnel)}" : "") +
                      (sw.ElapsedMilliseconds > 1000 ? $" (ждал предыдущую команду {sw.ElapsedMilliseconds} мс)" : ""));
 
-            if (session is { } running && running.CanSwitchTo(options) && await SwitchAsync(running, profile, options, cts).ConfigureAwait(false))
+            if (session is { } running && running.CanSwitchTo(profile, options))
             {
-                OnConnected(running, options, cts, sw);
-                return;
+                bool switched;
+                try
+                {
+                    switched = await SwitchAsync(running, profile, options, cts).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Отменили отключением или новым подключением — состояние выставит та команда.
+                    log.Info("Смена сервера отменена");
+                    return;
+                }
+                if (switched)
+                {
+                    OnConnected(running, options, cts, sw);
+                    return;
+                }
             }
 
             await StopSessionAsync().ConfigureAwait(false);
@@ -276,6 +291,7 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
             KillSwitchActive = current.KillSwitchActive,
             DelayMs = current.DelayMs,
             PublicIp = null,
+            PublicIpChecked = false,
             Warnings = [],
         });
         log.Info($"Подключено за {sw.ElapsedMilliseconds} мс" + (testDeadline != null ? $" (тестовый режим до {testDeadline:HH:mm:ss})" : ""));
@@ -363,6 +379,7 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
             SetStatus(s => s with
             {
                 PublicIp = ip,
+                PublicIpChecked = true,
                 DelayMs = delay.Milliseconds ?? s.DelayMs,
                 Warnings = [.. s.Warnings, .. warnings],
             });
@@ -370,8 +387,22 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         catch (Exception e) when (e is OperationCanceledException or System.Net.Sockets.SocketException)
         {
             log.Info($"Проверка после подключения не завершилась: {e.Message}");
+            if (!ct.IsCancellationRequested)
+                SetStatus(s => s with { PublicIpChecked = true });
         }
     }
+
+    /// <summary>Проверка связи, пока всё хорошо.</summary>
+    private static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(10);
+
+    /// <summary>После неудачной проверки — повтор почти сразу: одна неудача ещё не обрыв.</summary>
+    private static readonly TimeSpan WatchRetry = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Сколько неудач подряд считается обрывом. Обрыв замечается за ~10 + 8 + 2 + 8 ≈ 28 с в худшем случае
+    /// (было ~90 с), а один медленный ответ не рвёт соединения пользователя перезапуском xray.
+    /// </summary>
+    private const int WatchFailuresToRecover = 2;
 
     /// <summary>Следит за ядрами, связью и тестовым таймером.</summary>
     private async Task WatchAsync(TunSession current, CancellationToken ct)
@@ -382,7 +413,7 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         {
             while (!ct.IsCancellationRequested)
             {
-                var wait = TimeSpan.FromSeconds(30);
+                var wait = failures > 0 ? WatchRetry : WatchInterval;
                 if (testDeadline is { } deadline)
                     wait = TimeSpan.FromTicks(Math.Clamp((deadline - DateTimeOffset.Now).Ticks, TimeSpan.FromSeconds(1).Ticks, wait.Ticks));
 
@@ -433,9 +464,11 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
                     continue;
                 }
 
-                var delay = await DelayTester.HttpDelayViaSocksAsync(current.SocksPort, TimeSpan.FromSeconds(10), ct, current.SocksCredential).ConfigureAwait(false);
+                var delay = await current.ProbeAsync(ct).ConfigureAwait(false);
                 if (delay.Ok)
                 {
+                    if (failures > 0)
+                        log.Info($"Сервер снова отвечает ({delay.Milliseconds} мс)");
                     failures = 0;
                     // Сервер снова ответил после «не отвечает» — только теперь подключение действительно восстановлено.
                     SetStatus(s => s with
@@ -450,14 +483,14 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
                 failures++;
                 log.Info($"Сервер не ответил ({failures} раз подряд): {delay.Error}");
                 SetStatus(s => s with { DelayMs = null });
-                if (failures >= 3)
+                if (failures >= WatchFailuresToRecover)
                 {
                     failures = 0;
                     // «Переподключение» держится, пока сервер не ответит (см. выше), а не до перезапуска xray: иначе
                     // в сети со страницей входа служба через секунду снова писала бы «Подключено», хотя интернета нет,
                     // и интерфейс не показал бы кнопку «Войти в сеть».
                     SetStatus(s => s with { State = SessionState.Reconnecting, Message = "Сервер не отвечает, переподключаюсь" });
-                    if (!await UnderGateAsync(current, () => current.RestartXrayAsync(ct), ct).ConfigureAwait(false))
+                    if (!await UnderGateAsync(current, () => RecoverLinkAsync(current, ct), ct).ConfigureAwait(false))
                         return;
                 }
             }
@@ -470,6 +503,29 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
             log.Info($"Не удалось восстановить подключение: {e.Message} ({e.GetType().Name})");
             _ = Task.Run(() => DisconnectAsync($"Подключение потеряно: {e.Message}", SessionState.Error));
         }
+    }
+
+    /// <summary>
+    /// Сервер перестал отвечать (под gate). Сначала смотрим, не сменилась ли сеть: если Wi-Fi сменился, пока служба
+    /// была занята, xray привязан к старому адаптеру, и простой перезапуск ничего бы не дал. Нет сети — ждём её,
+    /// xray не трогаем (вернётся сеть — сработает CheckNetworkAsync).
+    /// </summary>
+    private async Task RecoverLinkAsync(TunSession current, CancellationToken ct)
+    {
+        var physical = NetworkInfo.GetDefaultPhysicalInterface();
+        if (physical == null)
+        {
+            SetStatus(s => s with { Message = NoNetworkMessage });
+            return;
+        }
+        if (physical.Index != current.Physical.Index || !physical.Gateway.Equals(current.Physical.Gateway))
+        {
+            await current.RebindAsync(physical, ct).ConfigureAwait(false);
+            SetStatus(s => s with { PhysicalInterface = physical.Name });
+            return;
+        }
+        log.Info("Перезапускаю xray: сервер не отвечает");
+        await current.RestartXrayAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>Выполняет действие над сессией под общей блокировкой, если сессия всё ещё текущая.</summary>
@@ -489,17 +545,27 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         }
     }
 
-    private void OnNetworkChanged(object? sender, EventArgs e)
+    // Подъём нашего же TUN тоже вызывает это событие, поэтому ждём, пока всё утихнет, и сравниваем адаптер.
+    private void OnNetworkChanged(object? sender, EventArgs e) => ScheduleNetworkCheck(TimeSpan.FromSeconds(3));
+
+    private void ScheduleNetworkCheck(TimeSpan delay)
     {
-        // Подъём нашего же TUN тоже вызывает это событие, поэтому ждём, пока всё утихнет, и сравниваем адаптер.
-        networkDebounce?.Dispose();
-        networkDebounce = new Timer(_ => _ = Task.Run(CheckNetworkAsync), null, TimeSpan.FromSeconds(3), Timeout.InfiniteTimeSpan);
+        lock (networkLock)
+        {
+            networkDebounce?.Dispose();
+            networkDebounce = new Timer(_ => _ = Task.Run(CheckNetworkAsync), null, delay, Timeout.InfiniteTimeSpan);
+        }
     }
 
     private async Task CheckNetworkAsync()
     {
         if (!await gate.WaitAsync(0).ConfigureAwait(false))
+        {
+            // Служба занята (подключение, переключение). Сеть могла смениться прямо сейчас — проверим, когда освободится,
+            // иначе xray остался бы привязан к пропавшему адаптеру.
+            ScheduleNetworkCheck(TimeSpan.FromSeconds(2));
             return;
+        }
         try
         {
             var current = session;
@@ -523,9 +589,9 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
                     return;
                 var ct = sessionCts?.Token ?? CancellationToken.None;
                 // Одна неудача — ещё не повод: первые запросы через туннель бывают медленными. Перезапуск xray рвёт все соединения.
-                var probe = await DelayTester.HttpDelayViaSocksAsync(current.SocksPort, TimeSpan.FromSeconds(5), ct, current.SocksCredential).ConfigureAwait(false);
+                var probe = await current.ProbeAsync(ct).ConfigureAwait(false);
                 if (!probe.Ok)
-                    probe = await DelayTester.HttpDelayViaSocksAsync(current.SocksPort, TimeSpan.FromSeconds(10), ct, current.SocksCredential).ConfigureAwait(false);
+                    probe = await current.ProbeAsync(ct).ConfigureAwait(false);
                 if (!probe.Ok)
                 {
                     log.Info($"После смены сети сервер не отвечает ({probe.Error}), перезапускаю xray");

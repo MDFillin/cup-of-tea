@@ -152,6 +152,24 @@ public class ConfigBuilderTests
         Assert.False(HasQuicRule(SingBoxConfigBuilder.Build(SingBox(blockQuic: false))));
     }
 
+    [Fact]
+    public void QuicIsBlockedOnlyForTcpServersWithInstantReject()
+    {
+        // Hysteria2 идёт по UDP и QUIC пропускает сама; режем только у VLESS.
+        Assert.True(SingBoxConfigBuilder.BlocksQuic(Xhttp, setting: true));
+        Assert.True(SingBoxConfigBuilder.BlocksQuic(LinkParser.Parse(LinkParserTests.VisionLink), setting: true));
+        Assert.False(SingBoxConfigBuilder.BlocksQuic(LinkParser.Parse(LinkParserTests.Hy2Link), setting: true));
+        Assert.False(SingBoxConfigBuilder.BlocksQuic(Xhttp, setting: false));
+
+        var c = SingBoxConfigBuilder.Build(SingBox(blockQuic: true));
+        // Отказ без перехода на «молча выбрасывать» после 50 срабатываний.
+        var quic = c["route"]!["rules"]!.AsArray().Single(r => (int?)r!["port"] == 443);
+        Assert.True((bool?)quic!["no_drop"]);
+        // Записи HTTPS (по ним Chrome пробует QUIC первым) не отдаются, пока QUIC режется.
+        Assert.Contains(c["dns"]!["rules"]!.AsArray(), r => (string?)r!["query_type"]![0] == "HTTPS" && (string?)r["action"] == "predefined");
+        Assert.Empty(SingBoxConfigBuilder.Build(SingBox(blockQuic: false))["dns"]!["rules"]!.AsArray());
+    }
+
     // Проверка настоящими ядрами из D:\vpn\client\cores (scripts\fetch-cores.ps1).
     [Theory]
     [InlineData("xhttp")]

@@ -105,7 +105,7 @@ public class SplitTunnelTests
         Assert.Null(apps["domain_suffix"]);
         Assert.Equal("proxy", (string?)c["route"]!["final"]);
         Assert.Equal("remote", (string?)c["dns"]!["final"]);
-        var dnsRule = c["dns"]!["rules"]![0]!;
+        var dnsRule = c["dns"]!["rules"]!.AsArray().Single(r => r!["domain_suffix"] != null)!;
         Assert.Equal("direct-dns", (string?)dnsRule["server"]);
         // QUIC режется у всего, что идёт через VPN, после правил раздельного туннелирования.
         Assert.True(rules.IndexOf(rules.Single(IsQuicReject)) > rules.IndexOf(sites));
@@ -119,7 +119,8 @@ public class SplitTunnelTests
         Assert.Equal("direct", (string?)c["route"]!["final"]);
         // DNS — весь через туннель: ответ провайдера для выбранных программ мог бы быть подменён.
         Assert.Equal("remote", (string?)c["dns"]!["final"]);
-        Assert.Empty(c["dns"]!["rules"]!.AsArray());
+        // Своих правил у DNS нет — только отказ в записях HTTPS, пока режется QUIC.
+        Assert.All(c["dns"]!["rules"]!.AsArray(), r => Assert.Equal("predefined", (string?)r!["action"]));
         Assert.Equal(2, rules.Count(r => (string?)r!["outbound"] == "proxy"));
         // QUIC режется только у выбранного (у прямого трафика он не мешает).
         var quic = rules.Where(IsQuicReject).ToList();
