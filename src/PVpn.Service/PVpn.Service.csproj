@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>TempestVPN.Service</AssemblyName>
+    <RootNamespace>PVpn.Service</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PVpn.Core\PVpn.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="PVpn.Core" />
+  </ItemGroup>
+
+</Project>

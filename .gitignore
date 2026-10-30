@@ -1,0 +1,15 @@
+bin/
+obj/
+/out/
+.vs/
+*.user
+TestResults/
+
+# Ядра скачиваются scripts\fetch-cores.ps1 (версии и SHA256 закреплены в скрипте).
+# Только в корне: git на Windows не различает регистр, и «cores/» задело бы src\PVpn.Core\Cores.
+/cores/
+
+# Никаких ключей и профилей в репозитории
+*.local.json
+profiles.dat
+*.trx

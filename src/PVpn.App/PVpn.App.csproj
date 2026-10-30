@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <!-- Только ради NotifyIcon (значок в трее). -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>TempestVPN</AssemblyName>
+    <RootNamespace>PVpn.App</RootNamespace>
+    <ApplicationIcon>Assets\pvpn.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WinForms нужен только для трея: его имена не должны спорить с WPF. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <!-- В WPF-проектах System.IO неявно не подключается (из-за System.Windows.Shapes.Path). -->
+    <Using Include="System.IO" />
+    <!-- Имена продукта (Product) нужны почти везде. -->
+    <Using Include="PVpn.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="ZXing.Net" Version="0.16.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PVpn.Core\PVpn.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\*.ico" />
+  </ItemGroup>
+
+</Project>

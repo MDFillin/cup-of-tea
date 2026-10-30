@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>tempest-cli</AssemblyName>
+    <RootNamespace>PVpn.Cli</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PVpn.Core\PVpn.Core.csproj" />
+  </ItemGroup>
+
+</Project>

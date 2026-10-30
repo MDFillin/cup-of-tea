@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PVpn.App/PVpn.App.csproj" />
+    <Project Path="src/PVpn.Cli/PVpn.Cli.csproj" />
+    <Project Path="src/PVpn.Core/PVpn.Core.csproj" />
+    <Project Path="src/PVpn.Service/PVpn.Service.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PVpn.Core.Tests/PVpn.Core.Tests.csproj" />
+  </Folder>
+</Solution>
