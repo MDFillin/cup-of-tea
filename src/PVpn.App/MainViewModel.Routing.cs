@@ -46,6 +46,12 @@ public sealed partial class MainViewModel
     /// <summary>Сообщать панели подписки идентификатор устройства (лимит устройств).</summary>
     [ObservableProperty] private bool sendHwid;
 
+    /// <summary>Применять настройки обхода, которые прислала панель подписки.</summary>
+    [ObservableProperty] private bool useSubscriptionBypass;
+
+    /// <summary>Что задают панели: «Подписка «X»: фрагментация …»; null — ни одна не задаёт.</summary>
+    [ObservableProperty] private string? subscriptionBypassSummary;
+
     /// <summary>Объявление панели (заголовок announce) на главной; null — нет или скрыто.</summary>
     [ObservableProperty] private string? announceText;
     [ObservableProperty] private string? announceUrl;
@@ -57,6 +63,7 @@ public sealed partial class MainViewModel
         ServerSort = SortChoices.Any(c => c.Key == settings.ServerSort) ? settings.ServerSort : "none";
         AutoPing = settings.AutoPing;
         SendHwid = settings.SendHwid;
+        UseSubscriptionBypass = settings.UseSubscriptionBypass;
         ApplySort();
     }
 
@@ -90,6 +97,16 @@ public sealed partial class MainViewModel
         }
         UpdateRoutingSummary();
         UpdateAnnounce();
+        var bypass = data.Subscriptions.Where(s => s.Bypass != null).Select(s => $"«{Flags.Strip(s.Name)}»: {s.Bypass!.Describe()}").ToList();
+        SubscriptionBypassSummary = bypass.Count == 0 ? null : "Панели задают для своих серверов — " + string.Join("; ", bypass) + ".";
+    }
+
+    partial void OnUseSubscriptionBypassChanged(bool value)
+    {
+        if (loadingSettings)
+            return;
+        settings.UseSubscriptionBypass = value;
+        SaveSettings();
     }
 
     partial void OnRoutingChoiceChanged(string value)

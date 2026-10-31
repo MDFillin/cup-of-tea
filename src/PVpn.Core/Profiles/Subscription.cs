@@ -53,6 +53,9 @@ public sealed record Subscription
     /// <summary>Профиль маршрутизации от панели (заголовок routing или строка в подписке); null — не прислала.</summary>
     public Routing.RoutingProfile? Routing { get; init; }
 
+    /// <summary>Настройки обхода от панели (fragmentation-*, noises-*); null — не прислала.</summary>
+    public Config.PanelBypass? Bypass { get; init; }
+
     public bool IsDue(DateTimeOffset now) =>
         AutoUpdate && (LastAttempt ?? DateTimeOffset.MinValue) < now - (LastError == null ? TimeSpan.FromHours(UpdateIntervalHours) : TimeSpan.FromMinutes(30));
 }
@@ -85,6 +88,7 @@ public sealed record SubscriptionMeta
     public bool HideUrl { get; init; }
     public string? SortOrder { get; init; }
     public Routing.RoutingProfile? Routing { get; init; }
+    public Config.PanelBypass? Bypass { get; init; }
 
     /// <summary>Панель переехала: новый полный адрес (new-url) или новый хост (new-domain). Только https.</summary>
     public string? NewUrl { get; init; }
@@ -259,6 +263,7 @@ public static partial class SubscriptionClient
             HideUrl = value("hide-url")?.Trim().ToLowerInvariant() is "1" or "true",
             SortOrder = sort is "ping" or "name" or "none" ? sort : null,
             Routing = Routing.RoutingProfiles.TryParse(value("routing")) ?? Routing.RoutingProfiles.TryParse(bodyRouting),
+            Bypass = Config.PanelBypass.FromHeaders(value),
             NewUrl = Uri.TryCreate(newUrl, UriKind.Absolute, out var nu) && nu.Scheme == Uri.UriSchemeHttps ? nu.AbsoluteUri : null,
             NewDomain = newDomain is { Length: > 0 } && Uri.CheckHostName(newDomain) == UriHostNameType.Dns ? newDomain.ToLowerInvariant() : null,
         };
@@ -392,6 +397,7 @@ public static class SubscriptionMerge
             HideUrl = fetch.Meta.HideUrl,
             SortOrder = fetch.Meta.SortOrder,
             Routing = fetch.Meta.Routing,
+            Bypass = fetch.Meta.Bypass,
             // Панель переехала — дальше ходим по новому адресу (только https).
             Url = fetch.Meta.NewUrl ?? (fetch.Meta.NewDomain is { } domain ? new UriBuilder(subscription.Url) { Host = domain }.Uri.AbsoluteUri : subscription.Url),
         };

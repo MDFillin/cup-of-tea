@@ -84,6 +84,9 @@ public sealed class AppSettings
 
     /// <summary>Сообщать панели подписки идентификатор устройства (x-hwid) — для лимита устройств.</summary>
     public bool SendHwid { get; set; } = true;
+
+    /// <summary>Настройки обхода от панели подписки (fragmentation-*, noises-*) — для её серверов поверх своих.</summary>
+    public bool UseSubscriptionBypass { get; set; } = true;
     public SplitTunnelSettings SplitTunnel { get; set; } = new();
 
     public static AppSettings Load()

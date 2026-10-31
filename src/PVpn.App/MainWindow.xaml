@@ -901,6 +901,13 @@
                                     </StackPanel.Resources>
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14" TextWrapping="Wrap"
                                                Text="Для серверов по ссылкам. У серверов, которые подписка отдаёт полным конфигом, свои настройки обхода (фрагментация, маски) — они не меняются." />
+                                    <ui:ToggleSwitch Content="Настройки обхода от подписки" Margin="0,0,0,2"
+                                                     IsChecked="{Binding DataContext.UseSubscriptionBypass, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                    <TextBlock Style="{StaticResource Hint}" Margin="48,2,0,14" TextWrapping="Wrap"
+                                               Text="Если панель присылает фрагментацию и шумы (заголовки fragmentation-*, noises-*), они заменяют настройки ниже для её серверов. Ваши настройки при этом не меняются." />
+                                    <TextBlock Style="{StaticResource Sub}" Margin="48,-8,0,14" TextWrapping="Wrap" Foreground="{StaticResource Accent}"
+                                               Text="{Binding DataContext.SubscriptionBypassSummary, RelativeSource={RelativeSource AncestorType=Window}}"
+                                               Visibility="{Binding DataContext.SubscriptionBypassSummary, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,16"
                                                Text="Оба режима, со следующего подключения. Значения по умолчанию подходят большинству сетей. Меняйте, если провайдер начал рвать или тормозить соединения; «Сбросить» вернёт всё как было." />
 

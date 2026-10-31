@@ -264,4 +264,43 @@ public class BypassTests
         var result = await CoreValidator.ValidateXrayAsync(cores, config.ToJsonString());
         Assert.False(result.Ok);
     }
+
+    [Fact]
+    public void PanelBypassOverridesOnlyWhatPanelSent()
+    {
+        var headers = new Dictionary<string, string>
+        {
+            ["fragmentation-enable"] = "1",
+            ["fragmentation-packets"] = "tlshello",
+            ["fragmentation-length"] = "10-20",
+            ["fragmentation-interval"] = "5-15",
+            ["noises-enable"] = "0",
+        };
+        var panel = PanelBypass.FromHeaders(h => headers.GetValueOrDefault(h))!;
+        var user = BypassOptions.Default with { FragmentLength = "300-400", Fingerprint = "firefox" };
+        var merged = BypassRules.Validate(panel.ApplyTo(user));
+        Assert.Equal(("tlshello", "10-20", "5-15"), (merged.FragmentPackets, merged.FragmentLength, merged.FragmentInterval));
+        Assert.False(merged.Noises);
+        // Чего панель не задавала — остаётся своё.
+        Assert.Equal("firefox", merged.Fingerprint);
+        Assert.Equal("фрагментация tlshello 10-20 байт 5-15 мс; шумы выкл.", panel.Describe());
+
+        Assert.Null(PanelBypass.FromHeaders(_ => null));
+        Assert.Equal("1-100", PanelBypass.FromHeaders(h => h == "fragmentation-packets" ? "all" : null)!.FragmentPackets);
+        // Неверное значение панели не проходит проверку — клиент тогда оставляет свои настройки.
+        Assert.Throws<ConfigException>(() => BypassRules.Validate(PanelBypass.FromHeaders(h => h == "noises-type" ? "evil" : null)!.ApplyTo(user)));
+    }
+
+    [Fact]
+    public void SubscriptionKeepsPanelBypass()
+    {
+        var f = SubscriptionClient.Parse(LinkParserTests.Hy2Link, h => h switch
+        {
+            "noises-enable" => "1", "noises-type" => "rand", "noises-packet" => "20-40", "noises-delay" => "5-10", _ => null,
+        });
+        var sub = new ProfileData().Apply(new Subscription { Name = "p", Url = "https://panel.example/s" }, f, DateTimeOffset.Now).Subscription;
+        Assert.Equal(("rand", "20-40", "5-10"), (sub.Bypass!.NoiseType, sub.Bypass.NoisePacket, sub.Bypass.NoiseDelay));
+        var hy2 = Proxy(Hy2, sub.Bypass.ApplyTo(BypassOptions.Default));
+        Assert.Equal("20-40", (string?)hy2["streamSettings"]!["finalmask"]!["udp"]![0]!["settings"]!["noise"]![0]!["rand"]);
+    }
 }

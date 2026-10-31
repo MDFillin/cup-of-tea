@@ -543,7 +543,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 try
                 {
                     await using var session = await ProxySession.StartAsync(item.Profile, cores,
-                        new ProxySessionOptions { SocksPort = 0, HttpPort = -1, Bypass = settings.Bypass, UseServerRouting = settings.UseServerRouting }, (_, _) => { });
+                        new ProxySessionOptions { SocksPort = 0, HttpPort = -1, Bypass = BypassFor(item.Profile, settings.Bypass), UseServerRouting = settings.UseServerRouting }, (_, _) => { });
                     item.Delay = await DelayTester.HttpDelayViaSocksAsync(session.SocksPort, TimeSpan.FromSeconds(10));
                 }
                 catch (Exception e) when (e is InvalidOperationException or IOException or System.ComponentModel.Win32Exception or ConfigException)
@@ -620,7 +620,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             Notice = "MTU в настройках должен быть числом от 1280 до 1500.";
             return;
         }
-        if (ReadBypass() is not { } bypass)
+        if (ReadBypass(profile) is not { } bypass)
             return;
         DnsOptions dns;
         try
@@ -667,7 +667,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     private async Task ConnectProxyAsync(Profile profile)
     {
-        if (ReadBypass() is not { } bypass)
+        if (ReadBypass(profile) is not { } bypass)
             return;
         CorePaths cores;
         try
@@ -1079,16 +1079,38 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     // ───────────── Настройки ─────────────
 
     /// <summary>Настройки обхода для подключения; при ошибке в полях — сообщение и null.</summary>
-    private BypassOptions? ReadBypass()
+    private BypassOptions? ReadBypass(Profile profile)
     {
+        BypassOptions user;
         try
         {
-            return Bypass.ToOptions();
+            user = Bypass.ToOptions();
         }
         catch (ConfigException e)
         {
             Notice = "Исправьте настройки «Обход блокировок»: " + e.Message;
             return null;
+        }
+        return BypassFor(profile, user);
+    }
+
+    /// <summary>
+    /// Настройки обхода для сервера: свои, а если панель его подписки прислала fragmentation-*/noises-* и это
+    /// разрешено, — с её значениями. Неверные значения панели игнорируются (остаются свои) и пишутся в журнал.
+    /// </summary>
+    private BypassOptions BypassFor(Profile profile, BypassOptions user)
+    {
+        if (!UseSubscriptionBypass || profile.SubscriptionId is not { } id
+            || data.Subscriptions.FirstOrDefault(s => s.Id == id) is not { Bypass: { } panel } sub)
+            return user;
+        try
+        {
+            return BypassRules.Validate(panel.ApplyTo(user));
+        }
+        catch (ConfigException e)
+        {
+            AppendLog("app", $"Настройки обхода от подписки «{Flags.Strip(sub.Name)}» не подошли ({e.Message}) — действуют свои");
+            return user;
         }
     }
 
