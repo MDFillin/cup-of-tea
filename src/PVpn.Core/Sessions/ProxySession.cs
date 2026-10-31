@@ -33,6 +33,9 @@ public sealed record ProxySessionOptions
 
     /// <summary>Раздельное туннелирование: в режиме прокси действуют только сайты (см. XrayOptions.SplitTunnel).</summary>
     public SplitTunnelOptions? SplitTunnel { get; init; }
+
+    /// <summary>У серверов с конфигом из подписки — их маршруты (см. XrayOptions.UseServerRouting).</summary>
+    public bool UseServerRouting { get; init; } = true;
 }
 
 /// <summary>
@@ -82,6 +85,7 @@ public sealed class ProxySession : IAsyncDisposable
             LogLevel = options.LogLevel,
             SplitTunnel = options.SplitTunnel is { } split ? SplitTunnelRules.Validate(split) : null,
             MetricsPort = metricsPort,
+            UseServerRouting = options.UseServerRouting,
         });
 
         var sanitizer = new LogSanitizer(profile.Secrets);

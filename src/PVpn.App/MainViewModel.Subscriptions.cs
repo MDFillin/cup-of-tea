@@ -33,6 +33,9 @@ public sealed class SubscriptionItem(Subscription subscription, int servers)
 
     public string? Error => Subscription.LastError is { } e ? $"Не удалось обновить: {e}" : null;
 
+    /// <summary>Служебные строки панели: «Использовано 3.43/60 ГБ, доступно 56.57 ГБ» и т. п.</summary>
+    public string? Notes => Subscription.Notes.Count > 0 ? string.Join(Environment.NewLine, Subscription.Notes) : null;
+
     /// <summary>Доля израсходованного трафика (0–100) для полоски; без лимита — 0.</summary>
     public double UsedPercent => Subscription.Total > 0 ? Math.Min(100, 100.0 * (Subscription.Upload + Subscription.Download) / Subscription.Total) : 0;
     public bool HasLimit => Subscription.Total > 0;

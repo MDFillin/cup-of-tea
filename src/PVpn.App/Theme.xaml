@@ -71,7 +71,14 @@
                 <ControlTemplate TargetType="ContentControl">
                     <Border Width="38" Height="38" CornerRadius="9" Background="{StaticResource Surface3}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          TextElement.FontSize="12" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource Text1}" />
+                                          TextElement.FontSize="12" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource Text1}">
+                            <ContentPresenter.Resources>
+                                <!-- Флаг страны вместо букв -->
+                                <DataTemplate DataType="{x:Type ImageSource}">
+                                    <Image Source="{Binding}" Width="28" Height="28" />
+                                </DataTemplate>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>

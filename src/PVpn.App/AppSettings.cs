@@ -38,6 +38,9 @@ public sealed class AppSettings
     public bool TunMode { get; set; } = true;
     public bool KillSwitch { get; set; } = true;
     public bool BlockQuic { get; set; } = true;
+
+    /// <summary>У серверов с конфигом из подписки — их маршруты и DNS (российские сайты напрямую и т. п.).</summary>
+    public bool UseServerRouting { get; set; } = true;
     public int Mtu { get; set; } = 1500;
 
     /// <summary>Сетевой стек TUN (gvisor, system, mixed), см. ConnectOptions.Stack.</summary>

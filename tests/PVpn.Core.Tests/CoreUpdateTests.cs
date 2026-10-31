@@ -79,11 +79,16 @@ public class CoreUpdateTests
             Cores = new CorePaths(Path.Combine(Root, "cores"));
             Directory.CreateDirectory(Cores.Directory);
             File.Copy(real.Xray, Cores.Xray);
+            // Как в настоящей установке и в релизе xray: рядом с ядром базы geoip/geosite.
+            foreach (var geo in CoreUpdater.GeoFiles)
+                File.Copy(Path.Combine(real.Directory, geo), Path.Combine(Cores.Directory, geo));
             using var ms = new MemoryStream();
             using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
             {
                 zip.CreateEntryFromFile(real.Xray, "xray.exe");
                 zip.CreateEntry("LICENSE");
+                foreach (var geo in CoreUpdater.GeoFiles)
+                    zip.CreateEntryFromFile(Path.Combine(real.Directory, geo), geo);
             }
             Zip = ms.ToArray();
             ZipSha = Convert.ToHexStringLower(SHA256.HashData(Zip));

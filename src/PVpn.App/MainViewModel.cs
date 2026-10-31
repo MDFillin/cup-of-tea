@@ -83,6 +83,9 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     [ObservableProperty] private bool killSwitch;
     [ObservableProperty] private bool blockQuic;
+
+    /// <summary>Маршруты и DNS из конфигов подписки (для серверов, которые панель отдала полным конфигом).</summary>
+    [ObservableProperty] private bool useServerRouting;
     [ObservableProperty] private string mtuText = "1500";
     [ObservableProperty] private string tunStack = "gvisor";
 
@@ -220,6 +223,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         IsTunMode = settings.TunMode;
         KillSwitch = settings.KillSwitch;
         BlockQuic = settings.BlockQuic;
+        UseServerRouting = settings.UseServerRouting;
         MtuText = settings.Mtu.ToString();
         TunStack = TunStackChoices.Contains(settings.TunStack) ? settings.TunStack : "gvisor";
         Notifications = settings.Notifications;
@@ -422,7 +426,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         LoadProfiles();
     }
 
-    private bool CanShowQr() => SelectedProfile != null;
+    // У сервера с полным конфигом из подписки ссылки нет — ни QR, ни правки ссылки.
+    private bool CanShowQr() => SelectedProfile is { Profile: not XrayConfigProfile };
 
     [RelayCommand(CanExecute = nameof(CanShowQr))]
     private void ShowQr()
@@ -525,7 +530,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 try
                 {
                     await using var session = await ProxySession.StartAsync(item.Profile, cores,
-                        new ProxySessionOptions { SocksPort = 0, HttpPort = -1, Bypass = settings.Bypass }, (_, _) => { });
+                        new ProxySessionOptions { SocksPort = 0, HttpPort = -1, Bypass = settings.Bypass, UseServerRouting = settings.UseServerRouting }, (_, _) => { });
                     item.Delay = await DelayTester.HttpDelayViaSocksAsync(session.SocksPort, TimeSpan.FromSeconds(10));
                 }
                 catch (Exception e) when (e is InvalidOperationException or IOException or System.ComponentModel.Win32Exception or ConfigException)
@@ -620,9 +625,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             var r = await service.SendAsync(new IpcRequest
             {
                 Command = IpcCommands.Connect,
-                Link = profile.SourceLink,
+                // Сервер из подписки с полным конфигом — конфигом (служба очистит его сама), иначе ссылкой.
+                Link = profile is XrayConfigProfile ? null : profile.SourceLink,
+                Config = (profile as XrayConfigProfile)?.Config,
                 Options = new ConnectOptions
                 {
+                    UseServerRouting = UseServerRouting,
                     KillSwitch = KillSwitch,
                     BlockQuic = BlockQuic,
                     Bypass = bypass,
@@ -666,6 +674,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 SetSystemProxy = true,
                 Bypass = bypass,
                 SplitTunnel = Split.ToOptions(),
+                UseServerRouting = UseServerRouting,
             }, (source, line) => Application.Current?.Dispatcher.BeginInvoke(() => AppendLog(source, line)));
             proxy = session;
             proxySince = DateTimeOffset.Now;
@@ -1071,6 +1080,13 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     partial void OnIsTunModeChanged(bool value) => SaveSettings();
     partial void OnKillSwitchChanged(bool value) => SaveSettings();
     partial void OnBlockQuicChanged(bool value) => SaveSettings();
+
+    partial void OnUseServerRoutingChanged(bool value)
+    {
+        SaveSettings();
+        if (!loadingSettings && IsActive && CurrentServer?.Profile is XrayConfigProfile)
+            Notice = "Маршруты подписки изменятся при следующем подключении.";
+    }
     partial void OnTunStackChanged(string value) => SaveSettings();
     partial void OnNotificationsChanged(bool value) => SaveSettings();
 
@@ -1180,6 +1196,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         settings.TunMode = IsTunMode;
         settings.KillSwitch = KillSwitch;
         settings.BlockQuic = BlockQuic;
+        settings.UseServerRouting = UseServerRouting;
         settings.TunStack = TunStack;
         settings.Notifications = Notifications;
         if (HotkeyError == null)

@@ -390,7 +390,7 @@
                                         <GroupStyle>
                                             <GroupStyle.HeaderTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding Name}" Style="{StaticResource GroupTitle}" Margin="12,10,0,6" />
+                                                    <TextBlock local:FlagText.Text="{Binding Name}" Style="{StaticResource GroupTitle}" Margin="12,10,0,6" />
                                                 </DataTemplate>
                                             </GroupStyle.HeaderTemplate>
                                         </GroupStyle>
@@ -472,6 +472,21 @@
                         <StackPanel>
                             <TextBlock Text="Маршруты" Style="{StaticResource H1}" />
                             <TextBlock Text="Какие программы и сайты идут через VPN, а какие напрямую. Изменения можно применить без переподключения." Style="{StaticResource Sub}" FontSize="14" />
+                            <Border Style="{StaticResource Card}" Padding="20,12" Margin="0,16,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Маршруты из подписки" FontFamily="{StaticResource Display}" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Style="{StaticResource Sub}" TextWrapping="Wrap"
+                                                   Text="Для серверов, которые панель отдаёт полным конфигом: их маршруты (например, российские сайты напрямую), DNS и автовыбор. Ваши правила ниже — главнее. Выключено — всё через сервер. Со следующего подключения." />
+                                    </StackPanel>
+                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" AutomationProperties.Name="Маршруты из подписки"
+                                                     IsChecked="{Binding DataContext.UseServerRouting, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
 
                         <Border Grid.Row="1" Style="{StaticResource Card}" Padding="20,16" Margin="0,16,0,0">
@@ -849,6 +864,8 @@
                                             <Setter Property="Margin" Value="48,2,0,14" />
                                         </Style>
                                     </StackPanel.Resources>
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14" TextWrapping="Wrap"
+                                               Text="Для серверов по ссылкам. У серверов, которые подписка отдаёт полным конфигом, свои настройки обхода (фрагментация, маски) — они не меняются." />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,16"
                                                Text="Оба режима, со следующего подключения. Значения по умолчанию подходят большинству сетей. Меняйте, если провайдер начал рвать или тормозить соединения; «Сбросить» вернёт всё как было." />
 
@@ -1029,6 +1046,8 @@
                                                         <StackPanel>
                                                             <TextBlock local:FlagText.Text="{Binding Name}" Style="{StaticResource Title}" FontWeight="SemiBold" />
                                                             <TextBlock Text="{Binding Details}" Style="{StaticResource Sub}" />
+                                                            <TextBlock Text="{Binding Notes}" Style="{StaticResource Sub}" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                                       Visibility="{Binding Notes, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
                                                             <ProgressBar Value="{Binding UsedPercent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,6,12,0"
                                                                          Visibility="{Binding HasLimit, Converter={StaticResource BoolToVisibility}}" />
                                                             <TextBlock Text="{Binding Error}" FontSize="13" TextWrapping="Wrap" Foreground="{x:Static local:StatusBrushes.Error}"

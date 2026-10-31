@@ -170,6 +170,12 @@ public sealed partial class CoreUpdater(CorePaths cores, HttpClient http, Action
             Extract(zip, ExeName(kind), staged);
             // Базы geoip/geosite — из того же проверенного архива: по ним работают маршруты серверов из подписок.
             var geo = kind == CoreKind.Xray ? GeoFiles.Where(f => TryExtract(zip, f, Path.Combine(staging, f))).ToList() : [];
+            // Нет баз в архиве — проверяем новое ядро с нынешними (на место ставятся только базы из архива).
+            if (kind == CoreKind.Xray)
+            {
+                foreach (var f in GeoFiles.Except(geo).Where(f => File.Exists(Path.Combine(cores.Directory, f))))
+                    File.Copy(Path.Combine(cores.Directory, f), Path.Combine(staging, f), overwrite: true);
+            }
 
             var reported = await GetVersionAsync(kind, staged, ct).ConfigureAwait(false);
             if (reported != release.Version)
@@ -490,7 +496,7 @@ public static class CoreSelfTest
               { "type": "field", "inboundTag": ["socks", "http"], "port": "53", "outboundTag": "dns-out" },
               { "type": "field", "protocol": ["bittorrent"], "outboundTag": "block" },
               { "type": "field", "ip": ["geoip:private"], "outboundTag": "direct" },
-              { "type": "field", "domain": ["geosite:category-ru", "regexp:\.ru$"], "outboundTag": "direct" },
+              { "type": "field", "domain": ["geosite:category-ru", "regexp:\\.ru$"], "outboundTag": "direct" },
               { "type": "field", "ip": ["geoip:ru"], "outboundTag": "direct" },
               { "type": "field", "network": "tcp,udp", "balancerTag": "auto" } ] }
         }

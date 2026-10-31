@@ -13,7 +13,7 @@ public sealed partial class ProfileItem(Profile profile, string? subscription = 
     /// <summary>Имя без флага-эмодзи: Windows рисует флаги буквами («NL»).</summary>
     public string Name => ProfileData.PlainName(Profile.Name) is { Length: > 0 } plain ? plain : Profile.Name;
     public string Details => Profile is XrayConfigProfile { Description: { } d }
-        ? $"{Profile.ProtocolLabel} · {d}"
+        ? $"{Profile.ProtocolLabel} · {Flags.Strip(d)}"
         : $"{Profile.ProtocolLabel} · {Profile.Host}:{Profile.Port}";
 
     /// <summary>Имя как в подписке, с флагами (их рисует <see cref="FlagText"/> картинками).</summary>
@@ -22,23 +22,19 @@ public sealed partial class ProfileItem(Profile profile, string? subscription = 
     /// <summary>Группа в списке: имя подписки или «Свои» (добавленные вручную).</summary>
     public string Group => subscription ?? "Свои";
 
-    /// <summary>Значок сервера: страна из флага в имени («NL») или коротко протокол.</summary>
-    public string Badge => FlagCode(Profile.Name) ?? Profile switch
+    /// <summary>Значок сервера: картинка флага из имени, а без флага — коротко протокол.</summary>
+    public object Badge => (object?)FlagText.Image(Flags.FirstCountry(Profile.Name)) ?? Profile switch
     {
         Hysteria2Profile => "HY2",
         VlessProfile { Network: "xhttp" } => "XH",
         VlessProfile { Flow: "xtls-rprx-vision" } => "VIS",
+        XrayConfigProfile { ServerCount: > 1 } => "AUTO",
+        XrayConfigProfile c when c.MainProtocol.StartsWith("Hysteria", StringComparison.Ordinal) => "HY2",
+        XrayConfigProfile c when c.MainProtocol.StartsWith("Trojan", StringComparison.Ordinal) => "TRJ",
+        XrayConfigProfile c when c.MainProtocol.Contains("XHTTP", StringComparison.Ordinal) => "XH",
+        XrayConfigProfile c when c.MainProtocol.Contains("Vision", StringComparison.Ordinal) => "VIS",
         _ => "VL",
     };
-
-    /// <summary>Флаг-эмодзи — две буквы Regional Indicator в начале имени.</summary>
-    private static string? FlagCode(string name)
-    {
-        var runes = name.EnumerateRunes().Take(2).ToArray();
-        return runes.Length == 2 && runes.All(r => r.Value is >= 0x1F1E6 and <= 0x1F1FF)
-            ? string.Concat(runes.Select(r => (char)('A' + r.Value - 0x1F1E6)))
-            : null;
-    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DelayText), nameof(DelayBrush))]

@@ -137,7 +137,8 @@ public class SubscriptionTests
         Assert.Equal("Панель", added.Subscription.Name);
         Assert.Equal(3, added.Added);
         Assert.Equal(100, added.Subscription.Total);
-        Assert.StartsWith("v2rayN", agent);
+        // Панели отдают полные конфиги (с маршрутами и DNS) только по такому User-Agent.
+        Assert.StartsWith(SubscriptionClient.FullConfigUserAgent, agent);
         await Assert.ThrowsAsync<SubscriptionException>(() => SubscriptionService.AddAsync(data, http, "https://panel.example/sub/abc123", null));
 
         using var broken = new HttpClient(new FakeHandler(HttpStatusCode.Forbidden, ""));
