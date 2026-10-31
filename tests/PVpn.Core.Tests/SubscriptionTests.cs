@@ -7,7 +7,7 @@ namespace PVpn.Core.Tests;
 public class SubscriptionTests
 {
     private static readonly string Body = string.Join("\n", LinkParserTests.XhttpLink, LinkParserTests.VisionLink, LinkParserTests.Hy2Link,
-        "vmess://eyJhZGQiOiIyMDMuMC4xMTMuMTAifQ==", "trojan://pass@203.0.113.10:443#t");
+        "tuic://uuid:pass@203.0.113.10:443#t", "ssr://c2VydmVyOjQ0Mw==");
 
     private static string Rename(string link, string name) => link[..link.IndexOf('#')] + "#" + Uri.EscapeDataString(name);
 
@@ -55,7 +55,7 @@ public class SubscriptionTests
 
     [Theory]
     [InlineData("<!DOCTYPE html><html>…</html>", "веб-страница")]
-    [InlineData("vmess://eyJhZGQiOiIyMDMuMC4xMTMuMTAifQ==", "другие протоколы")]
+    [InlineData("tuic://uuid:pass@203.0.113.10:443#t", "другие протоколы")]
     [InlineData("", "не нашлось")]
     public void RejectsBodiesWithoutServers(string body, string message)
     {

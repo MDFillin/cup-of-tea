@@ -7,6 +7,9 @@ namespace PVpn.Core.Profiles;
 [JsonDerivedType(typeof(VlessProfile), "vless")]
 [JsonDerivedType(typeof(Hysteria2Profile), "hysteria2")]
 [JsonDerivedType(typeof(XrayConfigProfile), "xray-config")]
+[JsonDerivedType(typeof(TrojanProfile), "trojan")]
+[JsonDerivedType(typeof(VmessProfile), "vmess")]
+[JsonDerivedType(typeof(ShadowsocksProfile), "shadowsocks")]
 public abstract record Profile
 {
     public Guid Id { get; init; } = Guid.NewGuid();
@@ -35,21 +38,27 @@ public abstract record Profile
 
 public enum ServerTransport { Tcp, Udp }
 
-public sealed record VlessProfile : Profile
+/// <summary>
+/// Сервер поверх TCP-транспорта xray (VLESS, Trojan, VMess): сеть, защита (TLS/REALITY) и параметры транспорта.
+/// Поля общие, чтобы соединение строилось одним кодом; имена полей XHTTP сохранены ради уже сохранённых профилей.
+/// </summary>
+public abstract record StreamProfile : Profile
 {
-    public required string Uuid { get; init; }
-    public string Encryption { get; init; } = "none";
-    public string? Flow { get; init; }
-
-    /// <summary>"raw" (он же tcp) или "xhttp".</summary>
+    /// <summary>raw (он же tcp), xhttp, ws, grpc или httpupgrade.</summary>
     public string Network { get; init; } = "raw";
 
-    /// <summary>"reality", "tls" или "none".</summary>
-    public string Security { get; init; } = "reality";
+    /// <summary>reality, tls или none.</summary>
+    public string Security { get; init; } = "none";
 
     public string? Sni { get; init; }
     public string? Fingerprint { get; init; }
     public string? Alpn { get; init; }
+
+    /// <summary>SHA-256 сертификата сервера (pcs в ссылке): вместо проверки цепочки — сверка с ним (самоподписанные сертификаты).</summary>
+    public string? PinSha256 { get; init; }
+
+    /// <summary>Имя, по которому проверять сертификат, если оно не совпадает с SNI (vcn в ссылке).</summary>
+    public string? VerifyName { get; init; }
 
     // REALITY
     public string? PublicKey { get; init; }
@@ -64,19 +73,109 @@ public sealed record VlessProfile : Profile
     /// <summary>Параметр extra из ссылки (JSON с дополнительными настройками XHTTP).</summary>
     public string? XhttpExtra { get; init; }
 
-    public override string ProtocolLabel
-    {
-        get
-        {
-            var transport = Network == "xhttp" ? "XHTTP" : Flow == "xtls-rprx-vision" ? "Vision" : "TCP";
-            var security = Security switch { "reality" => "REALITY", "tls" => "TLS", _ => "" };
-            return $"VLESS {transport} {security}".TrimEnd();
-        }
-    }
+    // WebSocket и HTTPUpgrade
+    public string? Path { get; init; }
+    public string? HostHeader { get; init; }
+
+    // gRPC
+    public string? ServiceName { get; init; }
+
+    /// <summary>gRPC в режиме multi (mode=multi в ссылке).</summary>
+    public bool GrpcMulti { get; init; }
 
     public override ServerTransport Transport => ServerTransport.Tcp;
 
+    /// <summary>«XHTTP REALITY», «WS TLS», «gRPC TLS» — вторая половина подписи протокола.</summary>
+    protected string StreamLabel(string? overrideTransport = null)
+    {
+        var transport = overrideTransport ?? Network switch
+        {
+            "xhttp" => "XHTTP",
+            "ws" => "WS",
+            "grpc" => "gRPC",
+            "httpupgrade" => "HTTPUpgrade",
+            _ => "TCP",
+        };
+        var security = Security switch { "reality" => "REALITY", "tls" => "TLS", _ => "" };
+        return $"{transport} {security}".TrimEnd();
+    }
+
+    /// <summary>Копия с полями транспорта (тип записи сохраняется).</summary>
+    internal StreamProfile WithStream(StreamFields s) => this with
+    {
+        Network = s.Network, Security = s.Security, Sni = s.Sni, Fingerprint = s.Fingerprint, Alpn = s.Alpn,
+        PinSha256 = s.PinSha256, VerifyName = s.VerifyName, PublicKey = s.PublicKey, ShortId = s.ShortId, SpiderX = s.SpiderX,
+        XhttpPath = s.XhttpPath, XhttpHost = s.XhttpHost, XhttpMode = s.XhttpMode, XhttpExtra = s.XhttpExtra,
+        Path = s.Path, HostHeader = s.HostHeader, ServiceName = s.ServiceName, GrpcMulti = s.GrpcMulti,
+    };
+}
+
+/// <summary>Поля транспорта и защиты из ссылки (общая часть VLESS, Trojan и VMess).</summary>
+internal sealed record StreamFields
+{
+    public string Network { get; init; } = "raw";
+    public string Security { get; init; } = "none";
+    public string? Sni { get; init; }
+    public string? Fingerprint { get; init; }
+    public string? Alpn { get; init; }
+    public string? PinSha256 { get; init; }
+    public string? VerifyName { get; init; }
+    public string? PublicKey { get; init; }
+    public string? ShortId { get; init; }
+    public string? SpiderX { get; init; }
+    public string? XhttpPath { get; init; }
+    public string? XhttpHost { get; init; }
+    public string? XhttpMode { get; init; }
+    public string? XhttpExtra { get; init; }
+    public string? Path { get; init; }
+    public string? HostHeader { get; init; }
+    public string? ServiceName { get; init; }
+    public bool GrpcMulti { get; init; }
+}
+
+public sealed record VlessProfile : StreamProfile
+{
+    public required string Uuid { get; init; }
+    public string Encryption { get; init; } = "none";
+    public string? Flow { get; init; }
+
+    public override string ProtocolLabel => "VLESS " + StreamLabel(Network == "raw" && Flow == "xtls-rprx-vision" ? "Vision" : null);
+
     public override IReadOnlyList<string> Secrets => [Uuid];
+}
+
+public sealed record TrojanProfile : StreamProfile
+{
+    public required string Password { get; init; }
+
+    public override string ProtocolLabel => "Trojan " + StreamLabel();
+
+    public override IReadOnlyList<string> Secrets => [Password];
+}
+
+public sealed record VmessProfile : StreamProfile
+{
+    public required string Uuid { get; init; }
+
+    /// <summary>Шифрование VMess (security в xray): auto, aes-128-gcm, chacha20-poly1305, none, zero.</summary>
+    public string Cipher { get; init; } = "auto";
+
+    public override string ProtocolLabel => "VMess " + StreamLabel();
+
+    public override IReadOnlyList<string> Secrets => [Uuid];
+}
+
+public sealed record ShadowsocksProfile : Profile
+{
+    /// <summary>Метод шифрования, например 2022-blake3-aes-128-gcm или chacha20-ietf-poly1305.</summary>
+    public required string Method { get; init; }
+    public required string Password { get; init; }
+
+    public override string ProtocolLabel => "Shadowsocks";
+
+    public override ServerTransport Transport => ServerTransport.Tcp;
+
+    public override IReadOnlyList<string> Secrets => [Password];
 }
 
 public sealed record Hysteria2Profile : Profile

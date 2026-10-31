@@ -98,7 +98,7 @@ public sealed record SubscriptionUpdate(Subscription Subscription, int Added, in
     {
         var sb = new StringBuilder($"«{Subscription.Name}»: серверов новых {Added}, обновлено {Updated}, удалено {Removed}");
         if (Unsupported > 0)
-            sb.Append($"; пропущено ссылок других протоколов (vmess, trojan, ss…): {Unsupported}");
+            sb.Append($"; пропущено ссылок других протоколов (ssr, tuic, wireguard…): {Unsupported}");
         if (Errors.Count > 0)
             sb.Append($"; ошибок в ссылках: {Errors.Count} (первая: {Errors[0].Message})");
         return sb.Append('.').ToString();
@@ -229,7 +229,7 @@ public static partial class SubscriptionClient
         if (result.Profiles.Count == 0 && result.Errors.Count == 0)
         {
             throw new SubscriptionException(unsupported > 0
-                ? $"В подписке нет серверов VLESS и Hysteria2 (есть только другие протоколы: {unsupported})"
+                ? $"В подписке нет поддерживаемых серверов (есть только другие протоколы: {unsupported})"
                 : "В подписке не нашлось ссылок на серверы");
         }
 
@@ -332,7 +332,7 @@ public static partial class SubscriptionClient
     }
 
     /// <summary>Ссылки протоколов, которые PVpn не поддерживает.</summary>
-    [GeneratedRegex(@"(?<![a-z0-9])(?:vmess|trojan|ss|ssr|tuic|wireguard|wg|socks)://\S+", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![a-z0-9])(?:ssr|tuic|wireguard|wg|socks|hysteria|anytls|amneziawg|awg)://\S+", RegexOptions.IgnoreCase)]
     private static partial Regex OtherLinkRegex();
 }
 

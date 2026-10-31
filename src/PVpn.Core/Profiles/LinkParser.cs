@@ -13,7 +13,7 @@ public sealed record ImportResult(IReadOnlyList<Profile> Profiles, IReadOnlyList
 /// <summary>Разбор ссылок vless:// и hy2:// (hysteria2:// — то же самое).</summary>
 public static partial class LinkParser
 {
-    [GeneratedRegex(@"(?:vless|hy2|hysteria2)://\S+", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![a-z0-9])(?:vless|hy2|hysteria2|trojan|vmess|ss)://\S+", RegexOptions.IgnoreCase)]
     private static partial Regex LinkRegex();
 
     /// <summary>
@@ -49,11 +49,19 @@ public static partial class LinkParser
     public static Profile Parse(string link)
     {
         link = link.Trim();
+        // vmess:// чаще всего — base64 от JSON (формат v2rayN), а не обычная ссылка.
+        if (link.StartsWith("vmess://", StringComparison.OrdinalIgnoreCase))
+            return ParseVmess(link);
+        // ss:// старого вида целиком в base64 («ss://base64(метод:пароль@хост:порт)#имя») — Split разобрать не сможет.
+        if (link.StartsWith("ss://", StringComparison.OrdinalIgnoreCase))
+            return ParseShadowsocks(link);
         var raw = Split(link);
         return raw.Scheme switch
         {
             "vless" => ParseVless(raw, link),
             "hy2" or "hysteria2" => ParseHysteria2(raw, link),
+            "trojan" => ParseTrojan(raw, link),
+            "ss" => ParseShadowsocks(link),
             _ => throw new LinkParseException($"Неизвестный тип ссылки: {raw.Scheme}://"),
         };
     }
@@ -62,20 +70,184 @@ public static partial class LinkParser
     {
         if (string.IsNullOrEmpty(r.UserInfo))
             throw new LinkParseException("В ссылке vless нет идентификатора пользователя (UUID)");
-
         var q = r.Query;
-        var network = (q.GetValueOrDefault("type") ?? "tcp").ToLowerInvariant() switch
+        var profile = new VlessProfile
+        {
+            Name = NameOrDefault(r),
+            Host = r.Host,
+            Port = r.Port,
+            SourceLink = link,
+            Uuid = r.UserInfo,
+            Encryption = NullIfEmpty(q.GetValueOrDefault("encryption")) ?? "none",
+            Flow = NullIfEmpty(q.GetValueOrDefault("flow")),
+        };
+        return (VlessProfile)profile.WithStream(ParseStream(q, defaultSecurity: "none"));
+    }
+
+    /// <summary>trojan://пароль@хост:порт?security=tls&amp;sni=…&amp;type=ws&amp;path=…#имя (по умолчанию TLS).</summary>
+    private static TrojanProfile ParseTrojan(RawLink r, string link)
+    {
+        if (string.IsNullOrEmpty(r.UserInfo))
+            throw new LinkParseException("В ссылке trojan нет пароля (часть до @)");
+        var profile = new TrojanProfile { Name = NameOrDefault(r), Host = r.Host, Port = r.Port, SourceLink = link, Password = r.UserInfo };
+        return (TrojanProfile)profile.WithStream(ParseStream(r.Query, defaultSecurity: "tls"));
+    }
+
+    /// <summary>
+    /// vmess://base64(JSON) — формат v2rayN (ps, add, port, id, scy, net, type, host, path, tls, sni, alpn, fp),
+    /// или обычная ссылка vmess://uuid@хост:порт?type=…&amp;security=…#имя.
+    /// </summary>
+    private static VmessProfile ParseVmess(string link)
+    {
+        var body = link[8..];
+        var hash = body.IndexOf('#');
+        if (TryDecodeBase64(hash >= 0 ? body[..hash] : body, out var json) && json.TrimStart().StartsWith('{'))
+        {
+            JsonElement o;
+            try
+            {
+                o = JsonDocument.Parse(json).RootElement;
+            }
+            catch (JsonException)
+            {
+                throw new LinkParseException("Ссылка vmess: в base64 не JSON");
+            }
+            string? Get(string name) => o.TryGetProperty(name, out var v) ? v.ValueKind switch
+            {
+                JsonValueKind.String => NullIfEmpty(v.GetString()?.Trim()),
+                JsonValueKind.Number => v.GetRawText(),
+                _ => null,
+            } : null;
+            var host = Get("add") ?? throw new LinkParseException("В ссылке vmess нет адреса сервера (add)");
+            if (!int.TryParse(Get("port"), out var port) || port is < 1 or > 65535)
+                throw new LinkParseException("В ссылке vmess неверный порт");
+            var id = Get("id") ?? throw new LinkParseException("В ссылке vmess нет UUID (id)");
+            var net = Get("net") ?? "tcp";
+            // Параметры JSON — в виде, как у обычной ссылки, чтобы транспорт разбирался одним кодом.
+            var q = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["type"] = net };
+            void Put(string key, string? value)
+            {
+                if (value != null)
+                    q[key] = value;
+            }
+            Put("security", Get("tls"));
+            Put("sni", Get("sni"));
+            Put("alpn", Get("alpn"));
+            Put("fp", Get("fp"));
+            Put("host", Get("host"));
+            Put("path", Get("path"));
+            Put("headerType", Get("type"));
+            Put("pbk", Get("pbk"));
+            Put("sid", Get("sid"));
+            Put("allowInsecure", Get("allowInsecure"));
+            Put("pcs", Get("pcs"));
+            Put("vcn", Get("vcn"));
+            if (net == "grpc")
+            {
+                Put("serviceName", Get("path"));
+                Put("mode", Get("type") == "multi" ? "multi" : null);
+                q.Remove("headerType");
+            }
+            var name = Get("ps") ?? (hash >= 0 ? Unescape(body[(hash + 1)..]).Trim() : null) ?? $"{host}:{port}";
+            var profile = new VmessProfile
+            {
+                Name = name, Host = host.Trim('[', ']'), Port = port, SourceLink = link, Uuid = id,
+                Cipher = NormalizeVmessCipher(Get("scy")),
+            };
+            return (VmessProfile)profile.WithStream(ParseStream(q, defaultSecurity: "none"));
+        }
+
+        var r = Split(link);
+        if (string.IsNullOrEmpty(r.UserInfo))
+            throw new LinkParseException("В ссылке vmess нет UUID");
+        // В обычной ссылке vmess «security» — шифрование VMess, а защита транспорта — в «tls»/«security=tls|reality».
+        var query = new Dictionary<string, string>(r.Query, StringComparer.OrdinalIgnoreCase);
+        var cipher = query.GetValueOrDefault("encryption");
+        if (query.GetValueOrDefault("security") is { } sec && sec is not ("tls" or "reality" or "none"))
+        {
+            cipher ??= sec;
+            query.Remove("security");
+        }
+        var plain = new VmessProfile
+        {
+            Name = NameOrDefault(r), Host = r.Host, Port = r.Port, SourceLink = link, Uuid = r.UserInfo,
+            Cipher = NormalizeVmessCipher(cipher),
+        };
+        return (VmessProfile)plain.WithStream(ParseStream(query, defaultSecurity: "none"));
+    }
+
+    private static string NormalizeVmessCipher(string? cipher) => (cipher?.Trim().ToLowerInvariant() ?? "auto") switch
+    {
+        "" or "auto" => "auto",
+        "aes-128-gcm" or "chacha20-poly1305" or "none" or "zero" => cipher!.Trim().ToLowerInvariant(),
+        var other => throw new LinkParseException($"Шифрование VMess «{other}» не поддерживается (auto, aes-128-gcm, chacha20-poly1305, none, zero)"),
+    };
+
+    private static readonly HashSet<string> ShadowsocksMethods = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "aes-128-gcm", "aes-256-gcm", "chacha20-poly1305", "chacha20-ietf-poly1305", "xchacha20-poly1305",
+        "xchacha20-ietf-poly1305", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305", "none", "plain",
+    };
+
+    /// <summary>
+    /// ss://base64(метод:пароль)@хост:порт#имя (SIP002), ss://метод:пароль@хост:порт (пароль в процентной кодировке)
+    /// или старое ss://base64(метод:пароль@хост:порт)#имя. Плагины (obfs, v2ray-plugin) не поддерживаются.
+    /// </summary>
+    private static ShadowsocksProfile ParseShadowsocks(string link)
+    {
+        var body = link[5..];
+        var fragment = "";
+        var hash = body.IndexOf('#');
+        if (hash >= 0)
+        {
+            fragment = Unescape(body[(hash + 1)..]).Trim();
+            body = body[..hash];
+        }
+        // Старый вид: всё до «#» — base64, внутри «метод:пароль@хост:порт».
+        if (!body.Contains('@') && TryDecodeBase64(body.Split('?', '/')[0], out var legacy) && legacy.Contains('@'))
+            body = legacy;
+        var r = Split("ss://" + body + (fragment.Length > 0 ? "#" + Uri.EscapeDataString(fragment) : ""));
+        if (NullIfEmpty(r.Query.GetValueOrDefault("plugin")) is { } plugin && !plugin.StartsWith("none", StringComparison.OrdinalIgnoreCase))
+            throw new LinkParseException($"Плагин Shadowsocks «{plugin.Split(';')[0]}» не поддерживается");
+        var userInfo = r.UserInfo ?? throw new LinkParseException("В ссылке ss нет метода и пароля");
+        if (!userInfo.Contains(':') && TryDecodeBase64(userInfo, out var decoded))
+            userInfo = decoded;
+        var colon = userInfo.IndexOf(':');
+        if (colon <= 0 || colon == userInfo.Length - 1)
+            throw new LinkParseException("В ссылке ss нет метода и пароля («метод:пароль»)");
+        var method = userInfo[..colon].Trim().ToLowerInvariant();
+        if (!ShadowsocksMethods.Contains(method))
+            throw new LinkParseException($"Метод Shadowsocks «{method}» не поддерживается");
+        return new ShadowsocksProfile
+        {
+            Name = NameOrDefault(r), Host = r.Host, Port = r.Port, SourceLink = link,
+            Method = method, Password = userInfo[(colon + 1)..],
+        };
+    }
+
+    /// <summary>
+    /// Транспорт и защита из параметров ссылки: type (tcp, xhttp, ws, grpc, httpupgrade), security (reality, tls, none),
+    /// sni, fp, alpn, pbk, sid, spx, path, host, mode, serviceName, extra, allowInsecure.
+    /// </summary>
+    private static StreamFields ParseStream(IReadOnlyDictionary<string, string> q, string defaultSecurity)
+    {
+        var network = (NullIfEmpty(q.GetValueOrDefault("type")) ?? "tcp").ToLowerInvariant() switch
         {
             "tcp" or "raw" => "raw",
             "xhttp" or "splithttp" => "xhttp",
-            var other => throw new LinkParseException($"Транспорт «{other}» пока не поддерживается (есть tcp и xhttp)"),
+            "ws" or "websocket" => "ws",
+            "grpc" or "gun" => "grpc",
+            "httpupgrade" => "httpupgrade",
+            var other => throw new LinkParseException($"Транспорт «{other}» не поддерживается (есть tcp, xhttp, ws, grpc и httpupgrade)"),
         };
 
         var headerType = q.GetValueOrDefault("headerType");
         if (network == "raw" && headerType is not (null or "" or "none"))
             throw new LinkParseException($"Маскировка tcp headerType={headerType} не поддерживается");
 
-        var security = (q.GetValueOrDefault("security") ?? "none").ToLowerInvariant();
+        var security = (NullIfEmpty(q.GetValueOrDefault("security")) ?? defaultSecurity).ToLowerInvariant();
+        if (security is "" or "false" or "0")
+            security = "none";
         if (security is not ("reality" or "tls" or "none"))
             throw new LinkParseException($"Защита «{security}» не поддерживается (есть reality, tls и none)");
 
@@ -93,27 +265,36 @@ public static partial class LinkParser
             catch (JsonException) { throw new LinkParseException("Параметр extra в ссылке — не JSON"); }
         }
 
-        return new VlessProfile
+        // Xray 26 не принимает allowInsecure: без проверки сертификата — только с его отпечатком (pcs).
+        var pin = NullIfEmpty(q.GetValueOrDefault("pcs")) ?? NullIfEmpty(q.GetValueOrDefault("pinSHA256"));
+        if (pin != null && !pin.Split(',').All(p => IsSha256Hex(p.Trim())))
+            throw new LinkParseException("pcs в ссылке — не SHA-256 в hex");
+        if (security == "tls" && pin == null && q.GetValueOrDefault("allowInsecure") is "1" or "true" or "True")
+            throw new LinkParseException("Ссылка с allowInsecure=1 без отпечатка сертификата (pcs): Xray 26 не подключается без проверки сертификата");
+
+        var path = NullIfEmpty(q.GetValueOrDefault("path"));
+        var host = NullIfEmpty(q.GetValueOrDefault("host"));
+        var mode = NullIfEmpty(q.GetValueOrDefault("mode"));
+        return new StreamFields
         {
-            Name = NameOrDefault(r),
-            Host = r.Host,
-            Port = r.Port,
-            SourceLink = link,
-            Uuid = r.UserInfo,
-            Encryption = NullIfEmpty(q.GetValueOrDefault("encryption")) ?? "none",
-            Flow = NullIfEmpty(q.GetValueOrDefault("flow")),
             Network = network,
             Security = security,
             Sni = sni,
             Fingerprint = NullIfEmpty(q.GetValueOrDefault("fp")),
             Alpn = NullIfEmpty(q.GetValueOrDefault("alpn")),
+            PinSha256 = security == "tls" ? pin : null,
+            VerifyName = security == "tls" ? NullIfEmpty(q.GetValueOrDefault("vcn")) : null,
             PublicKey = NullIfEmpty(publicKey),
             ShortId = NullIfEmpty(q.GetValueOrDefault("sid")),
             SpiderX = NullIfEmpty(q.GetValueOrDefault("spx")),
-            XhttpPath = network == "xhttp" ? NullIfEmpty(q.GetValueOrDefault("path")) ?? "/" : null,
-            XhttpHost = network == "xhttp" ? NullIfEmpty(q.GetValueOrDefault("host")) : null,
-            XhttpMode = network == "xhttp" ? NullIfEmpty(q.GetValueOrDefault("mode")) ?? "auto" : null,
+            XhttpPath = network == "xhttp" ? path ?? "/" : null,
+            XhttpHost = network == "xhttp" ? host : null,
+            XhttpMode = network == "xhttp" ? mode ?? "auto" : null,
             XhttpExtra = network == "xhttp" ? NullIfEmpty(extra) : null,
+            Path = network is "ws" or "httpupgrade" ? path ?? "/" : null,
+            HostHeader = network is "ws" or "httpupgrade" ? host : null,
+            ServiceName = network == "grpc" ? NullIfEmpty(q.GetValueOrDefault("serviceName")) ?? path ?? "" : null,
+            GrpcMulti = network == "grpc" && mode == "multi",
         };
     }
 

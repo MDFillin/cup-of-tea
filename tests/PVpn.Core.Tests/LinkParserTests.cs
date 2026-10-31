@@ -86,7 +86,7 @@ public class LinkParserTests
     }
 
     [Theory]
-    [InlineData($"vless://{Uuid}@203.0.113.10:443?type=ws&security=none#x", "ws")]
+    [InlineData($"vless://{Uuid}@203.0.113.10:443?type=kcp&security=none#x", "kcp")]
     [InlineData($"vless://{Uuid}@203.0.113.10:443?security=reality&sni=www.example.nl#x", "pbk")]
     [InlineData($"vless://{Uuid}@203.0.113.10:443?security=reality&pbk={Pbk}#x", "sni")]
     [InlineData($"vless://{Uuid}@203.0.113.10?security=none#x", "порт")]
@@ -97,7 +97,7 @@ public class LinkParserTests
     [InlineData("hy2://pass@203.0.113.10:abc#x", "порт")]
     [InlineData($"vless://{Uuid}@203.0.113.10:443,8443?security=none#x", "только у hy2")]
     [InlineData("hy2://pass@203.0.113.10:443?pinSHA256=1234#x", "SHA-256")]
-    [InlineData("trojan://pass@203.0.113.10:443#x", "Неизвестный")]
+    [InlineData("tuic://pass@203.0.113.10:443#x", "Неизвестный")]
     public void RejectsUnsupportedLinks(string link, string expectedInMessage)
     {
         var e = Assert.Throws<LinkParseException>(() => LinkParser.Parse(link));

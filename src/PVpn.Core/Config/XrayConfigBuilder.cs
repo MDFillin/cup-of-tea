@@ -78,7 +78,7 @@ public static class XrayConfigBuilder
             return ServerConfigs.BuildRuntime(server, options);
         var inbounds = new JsonArray();
         var bypass = options.Bypass;
-        var fragment = bypass.Fragment && profile is VlessProfile;
+        var fragment = bypass.Fragment && profile is StreamProfile { Security: "tls" or "reality" };
         var outbounds = new JsonArray { BuildOutbound(profile, ProxyTag, options.BindInterface, options.ServerAddressOverride, fragment, bypass) };
         if (fragment)
             outbounds.Add(BuildFragmentOutbound(options.BindInterface, bypass));
@@ -206,7 +206,8 @@ public static class XrayConfigBuilder
         bool viaFragment = false, BypassOptions? bypass = null) =>
         profile switch
         {
-            VlessProfile v => BuildVless(v, tag, bindInterface, addressOverride, viaFragment, bypass ?? BypassOptions.Default),
+            StreamProfile sp => BuildStreamOutbound(sp, tag, bindInterface, addressOverride, viaFragment, bypass ?? BypassOptions.Default),
+            ShadowsocksProfile ss => BuildShadowsocks(ss, tag, bindInterface, addressOverride),
             Hysteria2Profile h => BuildHysteria2(h, tag, bindInterface, addressOverride, bypass ?? BypassOptions.Default),
             _ => throw new ConfigException($"Неподдерживаемый профиль: {profile.GetType().Name}"),
         };
@@ -237,24 +238,75 @@ public static class XrayConfigBuilder
         return outbound;
     }
 
-    private static JsonObject BuildVless(VlessProfile p, string tag, string? bindInterface, string? addressOverride, bool viaFragment, BypassOptions bypass)
+    /// <summary>
+    /// VLESS, Trojan или VMess: свои settings у протокола, а транспорт (raw, xhttp, ws, grpc, httpupgrade) и защита
+    /// (TLS, REALITY) — общие. Настройки обхода: отпечаток TLS и режим XHTTP заменяют ссылочные, mux — только для raw.
+    /// </summary>
+    private static JsonObject BuildStreamOutbound(StreamProfile p, string tag, string? bindInterface, string? addressOverride, bool viaFragment, BypassOptions bypass)
+    {
+        var address = addressOverride ?? p.Host;
+        var (protocol, settings) = p switch
+        {
+            // У VLESS в xray 26 — плоская запись.
+            VlessProfile v => ("vless", new JsonObject
+            {
+                ["address"] = address, ["port"] = p.Port, ["id"] = v.Uuid, ["encryption"] = v.Encryption,
+            }.Also(o => { if (!string.IsNullOrEmpty(v.Flow)) o["flow"] = v.Flow; })),
+            TrojanProfile t => ("trojan", new JsonObject
+            {
+                ["servers"] = new JsonArray(new JsonObject { ["address"] = address, ["port"] = p.Port, ["password"] = t.Password }),
+            }),
+            VmessProfile m => ("vmess", new JsonObject
+            {
+                ["vnext"] = new JsonArray(new JsonObject
+                {
+                    ["address"] = address, ["port"] = p.Port,
+                    ["users"] = new JsonArray(new JsonObject { ["id"] = m.Uuid, ["security"] = m.Cipher }),
+                }),
+            }),
+            _ => throw new ConfigException($"Неподдерживаемый профиль: {p.GetType().Name}"),
+        };
+
+        var stream = BuildStream(p, bypass);
+        AddSockopt(stream, bindInterface);
+        if (viaFragment)
+        {
+            stream["sockopt"] ??= new JsonObject();
+            stream["sockopt"]!["dialerProxy"] = FragmentTag;
+        }
+        var outbound = new JsonObject
+        {
+            ["tag"] = tag,
+            ["protocol"] = protocol,
+            ["settings"] = settings,
+            ["streamSettings"] = stream,
+        };
+        // У XHTTP своё мультиплексирование (xmux), у gRPC — своё; mux.cool — только поверх raw.
+        if (bypass.Mux && p.Network == "raw")
+        {
+            var vision = p is VlessProfile { Flow: "xtls-rprx-vision" };
+            outbound["mux"] = new JsonObject
+            {
+                ["enabled"] = true,
+                // Vision не пускает TCP через mux (сервер рвёт такие соединения): через mux идёт только UDP.
+                ["concurrency"] = vision ? -1 : bypass.MuxConcurrency,
+                ["xudpConcurrency"] = bypass.XudpConcurrency,
+                // QUIC (UDP 443) — отдельным соединением, без mux. Блокирует его, если нужно, sing-box (BlockQuic).
+                ["xudpProxyUDP443"] = "skip",
+            };
+        }
+        return outbound;
+    }
+
+    private static JsonObject BuildStream(StreamProfile p, BypassOptions bypass)
     {
         var fingerprint = bypass.Fingerprint ?? p.Fingerprint ?? "chrome";
-        var settings = new JsonObject
-        {
-            ["address"] = addressOverride ?? p.Host,
-            ["port"] = p.Port,
-            ["id"] = p.Uuid,
-            ["encryption"] = p.Encryption,
-        };
-        if (!string.IsNullOrEmpty(p.Flow))
-            settings["flow"] = p.Flow;
-
         var stream = new JsonObject
         {
             ["network"] = p.Network,
             ["security"] = p.Security,
         };
+        string[] Alpn() => (p.Alpn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         switch (p.Security)
         {
@@ -273,63 +325,79 @@ public static class XrayConfigBuilder
             case "tls":
                 var tls = new JsonObject
                 {
-                    ["serverName"] = p.Sni ?? p.Host,
+                    ["serverName"] = p.Sni ?? p.HostHeader ?? p.XhttpHost ?? p.Host,
                     ["fingerprint"] = fingerprint,
                 };
-                if (!string.IsNullOrEmpty(p.Alpn))
-                    tls["alpn"] = ToJsonArray(p.Alpn.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                if (Alpn() is { Length: > 0 } alpn)
+                    tls["alpn"] = ToJsonArray(alpn);
+                if (!string.IsNullOrEmpty(p.PinSha256))
+                    tls["pinnedPeerCertSha256"] = p.PinSha256;
+                if (!string.IsNullOrEmpty(p.VerifyName))
+                    tls["verifyPeerCertByName"] = p.VerifyName;
                 stream["tlsSettings"] = tls;
                 break;
         }
 
-        if (p.Network == "xhttp")
+        switch (p.Network)
         {
-            var xhttp = new JsonObject
-            {
-                ["path"] = p.XhttpPath ?? "/",
-                ["mode"] = bypass.XhttpMode ?? p.XhttpMode ?? "auto",
-            };
-            if (!string.IsNullOrEmpty(p.XhttpHost))
-                xhttp["host"] = p.XhttpHost;
-            var extra = string.IsNullOrEmpty(p.XhttpExtra) ? null : JsonNode.Parse(p.XhttpExtra) as JsonObject;
-            if (bypass.Xmux is { } xmux)
-            {
-                // Если extra задан, Xray берёт настройки XHTTP (кроме host, path и mode) только из него,
-                // поэтому xmux кладётся туда.
-                extra ??= new JsonObject();
-                extra["xmux"] = BuildXmux(xmux);
-            }
-            if (extra != null)
-                xhttp["extra"] = extra;
-            stream["xhttpSettings"] = xhttp;
+            case "xhttp":
+                var xhttp = new JsonObject
+                {
+                    ["path"] = p.XhttpPath ?? "/",
+                    ["mode"] = bypass.XhttpMode ?? p.XhttpMode ?? "auto",
+                };
+                if (!string.IsNullOrEmpty(p.XhttpHost))
+                    xhttp["host"] = p.XhttpHost;
+                var extra = string.IsNullOrEmpty(p.XhttpExtra) ? null : JsonNode.Parse(p.XhttpExtra) as JsonObject;
+                if (bypass.Xmux is { } xmux)
+                {
+                    // Если extra задан, Xray берёт настройки XHTTP (кроме host, path и mode) только из него,
+                    // поэтому xmux кладётся туда.
+                    extra ??= new JsonObject();
+                    extra["xmux"] = BuildXmux(xmux);
+                }
+                if (extra != null)
+                    xhttp["extra"] = extra;
+                stream["xhttpSettings"] = xhttp;
+                break;
+            case "ws":
+            case "httpupgrade":
+                var ws = new JsonObject { ["path"] = p.Path ?? "/" };
+                if (!string.IsNullOrEmpty(p.HostHeader))
+                    ws["host"] = p.HostHeader;
+                stream[p.Network == "ws" ? "wsSettings" : "httpupgradeSettings"] = ws;
+                break;
+            case "grpc":
+                var grpc = new JsonObject { ["serviceName"] = p.ServiceName ?? "" };
+                if (p.GrpcMulti)
+                    grpc["multiMode"] = true;
+                if (!string.IsNullOrEmpty(p.HostHeader))
+                    grpc["authority"] = p.HostHeader;
+                stream["grpcSettings"] = grpc;
+                break;
         }
+        return stream;
+    }
 
+    /// <summary>Shadowsocks (AEAD и 2022): без транспорта и TLS — шифрует сам протокол.</summary>
+    private static JsonObject BuildShadowsocks(ShadowsocksProfile p, string tag, string? bindInterface, string? addressOverride)
+    {
+        var stream = new JsonObject();
         AddSockopt(stream, bindInterface);
-        if (viaFragment)
-        {
-            stream["sockopt"] ??= new JsonObject();
-            stream["sockopt"]!["dialerProxy"] = FragmentTag;
-        }
         var outbound = new JsonObject
         {
             ["tag"] = tag,
-            ["protocol"] = "vless",
-            ["settings"] = settings,
-            ["streamSettings"] = stream,
-        };
-        // У XHTTP своё мультиплексирование (xmux), mux.cool поверх него не нужен.
-        if (bypass.Mux && p.Network == "raw")
-        {
-            outbound["mux"] = new JsonObject
+            ["protocol"] = "shadowsocks",
+            ["settings"] = new JsonObject
             {
-                ["enabled"] = true,
-                // Vision не пускает TCP через mux (сервер рвёт такие соединения): через mux идёт только UDP.
-                ["concurrency"] = p.Flow == "xtls-rprx-vision" ? -1 : bypass.MuxConcurrency,
-                ["xudpConcurrency"] = bypass.XudpConcurrency,
-                // QUIC (UDP 443) — отдельным соединением, без mux. Блокирует его, если нужно, sing-box (BlockQuic).
-                ["xudpProxyUDP443"] = "skip",
-            };
-        }
+                ["servers"] = new JsonArray(new JsonObject
+                {
+                    ["address"] = addressOverride ?? p.Host, ["port"] = p.Port, ["method"] = p.Method, ["password"] = p.Password,
+                }),
+            },
+        };
+        if (stream.Count > 0)
+            outbound["streamSettings"] = stream;
         return outbound;
     }
 
@@ -433,4 +501,14 @@ public static class XrayConfigBuilder
     }
 
     internal static JsonArray ToJsonArray(IEnumerable<string> items) => new([.. items.Select(i => (JsonNode?)JsonValue.Create(i))]);
+}
+
+internal static class JsonObjectExtensions
+{
+    /// <summary>Донастроить объект прямо в выражении.</summary>
+    public static JsonObject Also(this JsonObject o, Action<JsonObject> change)
+    {
+        change(o);
+        return o;
+    }
 }
