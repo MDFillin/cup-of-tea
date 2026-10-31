@@ -27,7 +27,7 @@ public static class ServerConfigs
     public const string SocksInbound = "socks", HttpInbound = "http";
 
     /// <summary>Свой прямой выход для правил раздельного туннелирования в режиме прокси.</summary>
-    private const string OwnDirect = "tempest-direct";
+    private const string OwnDirect = "own-direct";
 
     // Что берётся из конфига. Всё остальное (inbounds, log с путями к файлам, api, stats, reverse…) отбрасывается:
     // служба запускает xray от имени SYSTEM, и конфиг из интернета не должен ни писать файлы, ни открывать порты.

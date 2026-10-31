@@ -1,4 +1,4 @@
-﻿# Выполняется В ВМ, в интерактивном сеансе pvpn (через задачу планировщика): действие в окне Tempest VPN
+﻿# Выполняется В ВМ, в интерактивном сеансе pvpn (через задачу планировщика): действие в окне The Cup of Tea
 # через UI Automation и снимок всех текстов окна в журнал.
 #   -Action dump | connect | check | proxy | tun | dnsleak | select -Server <имя> | tab -Tab <номер> | open -Server <страница настроек>
 # Страницы: 0 Главная, 1 Серверы, 2 Маршруты, 3 Настройки (dns, bypass, tun, trusted, subs, cores), 4 Журнал.
@@ -24,10 +24,10 @@ if ($Action -eq 'hotkey') {
 }
 $window = $null
 for ($i = 0; $i -lt 40 -and -not $window; $i++) {
-    $window = $AE::RootElement.FindFirst([Windows.Automation.TreeScope]::Children, (NameCondition 'Tempest VPN'))
+    $window = $AE::RootElement.FindFirst([Windows.Automation.TreeScope]::Children, (NameCondition 'The Cup of Tea'))
     if (-not $window) { Start-Sleep -Milliseconds 500 }
 }
-if (-not $window) { Log "--- $(Get-Date -Format HH:mm:ss) ${Action}: окно Tempest VPN не найдено"; exit 1 }
+if (-not $window) { Log "--- $(Get-Date -Format HH:mm:ss) ${Action}: окно The Cup of Tea не найдено"; exit 1 }
 
 function Find([string]$name) { $window.FindFirst([Windows.Automation.TreeScope]::Descendants, (NameCondition $name)) }
 function Ancestor($element, $type) {

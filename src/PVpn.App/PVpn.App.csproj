@@ -5,7 +5,7 @@
     <UseWPF>true</UseWPF>
     <!-- Только ради NotifyIcon (значок в трее). -->
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>TempestVPN</AssemblyName>
+    <AssemblyName>CupOfTea</AssemblyName>
     <RootNamespace>PVpn.App</RootNamespace>
     <ApplicationIcon>Assets\pvpn.ico</ApplicationIcon>
   </PropertyGroup>

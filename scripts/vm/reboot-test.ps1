@@ -1,6 +1,6 @@
 ﻿# Этап 4 в тестовой ВМ: перезагрузка во время подключения (с kill switch).
 # -Hard — аппаратный сброс ВМ (как внезапное отключение питания), иначе обычная перезагрузка Windows.
-# После загрузки сеть должна быть чистой: нет фильтров kill switch, адаптера TempestVPN и маршрута к серверу, прямой интернет работает.
+# После загрузки сеть должна быть чистой: нет фильтров kill switch, адаптера CupOfTea и маршрута к серверу, прямой интернет работает.
 [CmdletBinding()]
 param(
     [string]$Profile = 'my-hy2',
@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 $vbm = Join-Path (Get-ItemProperty 'HKLM:\SOFTWARE\Oracle\VirtualBox').InstallDir 'VBoxManage.exe'
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 function Step([string]$Text) { Write-Host "`n=== $(Get-Date -Format HH:mm:ss) $Text" -ForegroundColor Cyan }
 
 Step "Подключение $Profile"
@@ -43,8 +43,8 @@ Start-Sleep 20
 
 Step 'Состояние после загрузки'
 & $vm run -TimeoutSec 120 -Command ("$cli svc status; $cli killswitch; " +
-    "'Адаптеров TempestVPN: ' + @(Get-NetAdapter -IncludeHidden | Where-Object Name -eq TempestVPN).Count; " +
+    "'Адаптеров CupOfTea: ' + @(Get-NetAdapter -IncludeHidden | Where-Object Name -eq CupOfTea).Count; " +
     "'Маршрутов к серверу: ' + @(Get-NetRoute -DestinationPrefix $ServerIp/32 -ErrorAction SilentlyContinue).Count; " +
     "'Внешний IP: ' + ((curl.exe -s -m 10 https://api.ipify.org) -join ''); " +
     "'DNS: ' + ((Resolve-DnsName example.com -Type A -DnsOnly -ErrorAction SilentlyContinue | Where-Object IPAddress | ForEach-Object IPAddress) -join ', '); " +
-    "Get-Content (Get-ChildItem C:\ProgramData\TempestVPN\logs | Select-Object -Last 1).FullName -Encoding UTF8 -Tail 8")
+    "Get-Content (Get-ChildItem C:\ProgramData\CupOfTea\logs | Select-Object -Last 1).FullName -Encoding UTF8 -Tail 8")

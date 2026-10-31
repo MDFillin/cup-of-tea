@@ -55,7 +55,7 @@ internal sealed class ServiceLog
         }
     }
 
-    public void Info(string text) => Write("tempest", text);
+    public void Info(string text) => Write("service", text);
 
     public IReadOnlyList<LogLine> After(long after)
     {

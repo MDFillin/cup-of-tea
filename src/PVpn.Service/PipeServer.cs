@@ -9,7 +9,7 @@ using PVpn.Core.Ipc;
 namespace PVpn.Service;
 
 /// <summary>
-/// Канал \\.\pipe\tempestvpn. Подключаться могут только SYSTEM, администраторы и пользователи из service.json.
+/// Канал \\.\pipe\cupoftea. Подключаться могут только SYSTEM, администраторы и пользователи из service.json.
 /// Служба не принимает от клиента ни путей, ни готовых конфигов — только ссылку сервера и настройки.
 /// </summary>
 internal sealed class PipeServer(SessionManager manager, CoreUpdateManager coreUpdates, ServiceLog log, ServiceConfig config) : BackgroundService

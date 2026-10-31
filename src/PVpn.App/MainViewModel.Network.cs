@@ -92,7 +92,7 @@ public sealed partial class MainViewModel
             switch (action)
             {
                 case AutoConnectAction.Disconnect:
-                    AppendLog("tempest", $"Доверенная сеть ({CurrentNetworks}) — отключаю VPN");
+                    AppendLog("app", $"Доверенная сеть ({CurrentNetworks}) — отключаю VPN");
                     await DisconnectAsync();
                     break;
                 case AutoConnectAction.Connect when SelectedProfile != null:
@@ -103,14 +103,14 @@ public sealed partial class MainViewModel
                         CaptiveDetected = internet == InternetState.Portal;
                         if (internet == InternetState.Portal)
                         {
-                            AppendLog("tempest", "Сеть просит войти (страница входа) — автоподключение ждёт");
+                            AppendLog("app", "Сеть просит войти (страница входа) — автоподключение ждёт");
                             Notification?.Invoke("Сеть просит войти", $"Нажмите «Войти в сеть» в {Brand.Name}: откроется страница входа, после неё VPN подключится сам.");
                             return;
                         }
                         if (internet == InternetState.Offline)
                             return;
                     }
-                    AppendLog("tempest", $"Автоподключение: сеть {CurrentNetworks} не в доверенных");
+                    AppendLog("app", $"Автоподключение: сеть {CurrentNetworks} не в доверенных");
                     await ConnectOrDisconnectAsync();
                     break;
             }

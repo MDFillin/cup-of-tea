@@ -8,9 +8,9 @@ using Wpf.Ui.Controls;
 
 namespace PVpn.App;
 
-// TempestVPN.exe                            — окно и значок в трее
-// TempestVPN.exe --tray                     — сразу в трей (автозапуск)
-// TempestVPN.exe --snapshot <png> [--tab N] [--sub dns|bypass|tun|trusted|subs|cores] [--width N] [--height N]
+// CupOfTea.exe                            — окно и значок в трее
+// CupOfTea.exe --tray                     — сразу в трей (автозапуск)
+// CupOfTea.exe --snapshot <png> [--tab N] [--sub dns|bypass|tun|trusted|subs|cores] [--width N] [--height N]
 //                                           — (разработка) отрисовать окно в PNG и выйти
 public partial class App : Application
 {
@@ -36,7 +36,7 @@ public partial class App : Application
             Shutdown();
             return;
         }
-        // Серверы, настройки и копия системного прокси из папок PVpn (до переименования) — в папки Tempest VPN.
+        // Серверы, настройки и копия системного прокси из папок PVpn (до переименования) — в папки The Cup of Tea.
         if (snapshot == null)
             LegacyData.MigrateUserData();
 
@@ -230,7 +230,7 @@ public partial class App : Application
         e.Handled = true;
     }
 
-    /// <summary>Ошибка в app-errors.log (%LOCALAPPDATA%\TempestVPN) — попадает в диагностику.</summary>
+    /// <summary>Ошибка в app-errors.log (%LOCALAPPDATA%\CupOfTea) — попадает в диагностику.</summary>
     private static void LogError(string where, Exception e)
     {
         try

@@ -3,7 +3,7 @@
 [CmdletBinding()]
 param(
     [string]$ExpectedIp = '203.0.113.10',
-    [string]$TunAlias = 'TempestVPN'
+    [string]$TunAlias = 'CupOfTea'
 )
 $results = New-Object System.Collections.Generic.List[object]
 function Add-Result([string]$Name, [bool]$Ok, [string]$Detail) {

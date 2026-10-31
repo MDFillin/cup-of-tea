@@ -1,5 +1,5 @@
 ﻿# Автоподключение, доверенные сети и страница входа в сеть (пункт F) в тестовой ВМ через интерфейс:
-#   1) имена сетей: TUN TempestVPN в них не попадает (иначе «сеть» менялась бы при подключении);
+#   1) имена сетей: TUN CupOfTea в них не попадает (иначе «сеть» менялась бы при подключении);
 #   2) автоподключение при запуске программы;
 #   3) «Доверять этой сети» — VPN отключается; убрать из доверенных — подключается снова;
 #   4) ручное отключение: автоматика в этой сети молчит (проверка через 70 с);
@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 $vbm = Join-Path (Get-ItemProperty 'HKLM:\SOFTWARE\Oracle\VirtualBox').InstallDir 'VBoxManage.exe'
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $failures = 0
 $hosts = 'C:\Windows\System32\drivers\etc\hosts'
 
@@ -26,7 +26,7 @@ function Result([string]$Name, [bool]$Ok, [string]$Details) {
 }
 function Ui([string[]]$Steps) { & (Join-Path $PSScriptRoot 'ui-test.ps1') -ShotDir $ShotDir -Steps $Steps | Out-Null }
 function State { ((Guest -AsUser "$cli svc status") | Select-Object -First 1) -join '' }
-function StopApp { Guest -AsUser 'Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 1' | Out-Null }
+function StopApp { Guest -AsUser 'Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 1' | Out-Null }
 function Networks { ((Guest -AsUser "@($cli netinfo) -match '^Сети|^Интернет'") -join ' | ') }
 # Настройки pvpn: автоподключение и доверенные сети (JSON копируется с хоста — в команде для ВМ нельзя двойные кавычки).
 function Settings([bool]$Auto) {
@@ -34,7 +34,7 @@ function Settings([bool]$Auto) {
     @{ AutoConnect = $Auto; DisconnectOnTrusted = $true; TrustedNetworks = @() } | ConvertTo-Json | Set-Content $file -Encoding utf8
     & $vm copy -Source $file -Dest C:\PVpnSetup
     Remove-Item $file
-    Guest -AsUser 'Copy-Item C:\PVpnSetup\pvpn-f-settings.json C:\Users\pvpn\AppData\Roaming\TempestVPN\settings.json -Force' | Out-Null
+    Guest -AsUser 'Copy-Item C:\PVpnSetup\pvpn-f-settings.json C:\Users\pvpn\AppData\Roaming\CupOfTea\settings.json -Force' | Out-Null
 }
 
 StopApp

@@ -65,38 +65,38 @@ public static unsafe class KillSwitch
                 var c = new Conditions(arena);
 
                 foreach (var layer in AllLayers)
-                    AddFilter(h, arena, layer, WeightLoopback, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: loopback", c.Loopback());
+                    AddFilter(h, arena, layer, WeightLoopback, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: loopback", c.Loopback());
 
                 foreach (var appId in appIds)
                     foreach (var layer in AllLayers)
-                        AddFilter(h, arena, layer, WeightApps, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: ядра VPN", c.App((FWP_BYTE_BLOB*)appId));
+                        AddFilter(h, arena, layer, WeightApps, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: ядра VPN", c.App((FWP_BYTE_BLOB*)appId));
 
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: DHCP",
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCP",
                     c.Protocol(IpProtoUdp), c.RemotePort(67));
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: DHCP",
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCP",
                     c.Protocol(IpProtoUdp), c.LocalPort(68));
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: DHCPv6",
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCPv6",
                     c.Protocol(IpProtoUdp), c.RemotePort(547));
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: DHCPv6",
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCPv6",
                     c.Protocol(IpProtoUdp), c.LocalPort(546));
 
                 if (tunnelLuid is { } luid)
                     foreach (var layer in AllLayers)
-                        AddFilter(h, arena, layer, WeightTunnel, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: туннель", c.LocalInterface(luid));
+                        AddFilter(h, arena, layer, WeightTunnel, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: туннель", c.LocalInterface(luid));
 
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, WeightBlockDns, FWP_ACTION_TYPE.FWP_ACTION_BLOCK, "Tempest VPN: DNS мимо туннеля", c.RemotePort(53));
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6, WeightBlockDns, FWP_ACTION_TYPE.FWP_ACTION_BLOCK, "Tempest VPN: DNS мимо туннеля", c.RemotePort(53));
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, WeightBlockDns, FWP_ACTION_TYPE.FWP_ACTION_BLOCK, "The Cup of Tea: DNS мимо туннеля", c.RemotePort(53));
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6, WeightBlockDns, FWP_ACTION_TYPE.FWP_ACTION_BLOCK, "The Cup of Tea: DNS мимо туннеля", c.RemotePort(53));
 
                 // Несколько условий с одним полем объединяются через ИЛИ: один фильтр на все локальные сети.
                 var lan4 = lanCidrs.Select(c.RemoteCidr).ToArray();
                 var lan6 = LanCidrs6.Select(c.RemoteCidr).ToArray();
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: локальная сеть", lan4);
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: локальная сеть", lan4);
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: локальная сеть", lan6);
-                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "Tempest VPN: локальная сеть", lan6);
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: локальная сеть", lan4);
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: локальная сеть", lan4);
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: локальная сеть", lan6);
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: локальная сеть", lan6);
 
                 foreach (var layer in AllLayers)
-                    AddFilter(h, arena, layer, WeightBlockAll, FWP_ACTION_TYPE.FWP_ACTION_BLOCK, "Tempest VPN: всё остальное");
+                    AddFilter(h, arena, layer, WeightBlockAll, FWP_ACTION_TYPE.FWP_ACTION_BLOCK, "The Cup of Tea: всё остальное");
             });
         }
         finally

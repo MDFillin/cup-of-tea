@@ -115,7 +115,7 @@ public sealed class ProxySession : IAsyncDisposable
             return requested;
         var port = Ports.GetFreeLoopbackPort();
         if (requested != 0)
-            onLog("tempest", $"Порт {what} {requested} занят другой программой, используется {port}");
+            onLog("app", $"Порт {what} {requested} занят другой программой, используется {port}");
         return port;
     }
 

@@ -235,7 +235,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         if (WinInetProxy.HasPendingRestore)
         {
             WinInetProxy.Restore();
-            AppendLog("tempest", "Системный прокси возвращён к прежним настройкам (прошлый запуск завершился некорректно)");
+            AppendLog("app", "Системный прокси возвращён к прежним настройкам (прошлый запуск завершился некорректно)");
         }
 
         LoadProfiles();
@@ -679,7 +679,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             proxy = session;
             proxySince = DateTimeOffset.Now;
             SplitPending = false;
-            AppendLog("tempest", $"Прокси: {profile.Name}, SOCKS 127.0.0.1:{session.SocksPort}, HTTP 127.0.0.1:{session.HttpPort}, адаптер «{session.BoundInterface ?? "по умолчанию"}»");
+            AppendLog("app", $"Прокси: {profile.Name}, SOCKS 127.0.0.1:{session.SocksPort}, HTTP 127.0.0.1:{session.HttpPort}, адаптер «{session.BoundInterface ?? "по умолчанию"}»");
             proxyNextCheck = DateTime.MinValue;
         }
         catch (Exception e) when (e is InvalidOperationException or IOException or System.ComponentModel.Win32Exception or ConfigException)
@@ -701,7 +701,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         {
             SetState(UiState.Busy, "Отключение…", "Возвращаю системный прокси");
             await session.DisposeAsync();
-            AppendLog("tempest", "Прокси выключен, системный прокси восстановлен");
+            AppendLog("app", "Прокси выключен, системный прокси восстановлен");
         }
         PublicIp = null;
         DelayText = null;
@@ -770,7 +770,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         sessionSince = proxySince;
         if (session.Xray.HasExited)
         {
-            AppendLog("tempest", "xray неожиданно завершился, прокси выключен");
+            AppendLog("app", "xray неожиданно завершился, прокси выключен");
             await StopProxyAsync();
             SetState(UiState.Error, "Ошибка", "xray завершился. Подробности — в «Журнале».");
             return;
@@ -1153,17 +1153,23 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             SaveSettings();
     }
 
-    /// <summary>Автозапуск, включённый до переименования (значение «PVpn» вело на старый exe), — на новое имя.</summary>
+    /// <summary>Автозапуск, включённый до переименования (значения «TempestVPN» и «PVpn» вели на старый exe), — на новое имя.</summary>
     private static bool MigrateAutostart()
     {
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(AutostartKey);
-            if (key.GetValue(Product.LegacyId) == null)
-                return false;
-            key.DeleteValue(Product.LegacyId, throwOnMissingValue: false);
-            key.SetValue(Product.Id, $"\"{Environment.ProcessPath}\" --tray");
-            return true;
+            var found = false;
+            foreach (var legacy in Product.LegacyIds)
+            {
+                if (key.GetValue(legacy) == null)
+                    continue;
+                key.DeleteValue(legacy, throwOnMissingValue: false);
+                found = true;
+            }
+            if (found)
+                key.SetValue(Product.Id, $"\"{Environment.ProcessPath}\" --tray");
+            return found;
         }
         catch (Exception e) when (e is UnauthorizedAccessException or IOException)
         {

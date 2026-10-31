@@ -13,7 +13,7 @@ $ErrorActionPreference = 'Stop'
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 $vbm = Join-Path (Get-ItemProperty 'HKLM:\SOFTWARE\Oracle\VirtualBox').InstallDir 'VBoxManage.exe'
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $failures = 0
 $hosts = 'C:\Windows\System32\drivers\etc\hosts'
 
@@ -28,7 +28,7 @@ function Status { ((Guest -AsUser "$cli svc status") -join ' ') -replace '\s+', 
 function Filters { ((Guest "$cli killswitch") -join '').Trim() }
 function UiLog { (Guest -AsUser 'Get-Content C:\PVpnSetup\ui.log -Encoding UTF8 | Select-Object -Last 120') -join "`n" }
 
-Guest -AsUser "Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force; $cli svc disconnect | Out-Null; Remove-Item C:\PVpnSetup\ui.log, C:\Users\pvpn\AppData\Roaming\TempestVPN\settings.json -ErrorAction SilentlyContinue" | Out-Null
+Guest -AsUser "Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force; $cli svc disconnect | Out-Null; Remove-Item C:\PVpnSetup\ui.log, C:\Users\pvpn\AppData\Roaming\CupOfTea\settings.json -ErrorAction SilentlyContinue" | Out-Null
 
 Step 'VPN включён (TUN, kill switch)'
 Ui 'start', 'tun', 'select:my-xhttp', 'connect', 'wait:12'
@@ -79,6 +79,6 @@ finally {
     & $vbm controlvm $VmName setlinkstate1 on
 }
 
-Guest -AsUser "Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force; $cli svc disconnect" | Out-Null
+Guest -AsUser "Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force; $cli svc disconnect" | Out-Null
 Write-Host "`nПровалено проверок: $failures"
 exit $failures

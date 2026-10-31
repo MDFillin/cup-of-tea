@@ -198,7 +198,7 @@
                             <Border Style="{StaticResource SegmentBox}" HorizontalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
                                     <RadioButton Style="{StaticResource Segment}" GroupName="Mode" IsChecked="{Binding IsTunMode}" IsEnabled="{Binding CanChangeMode}"
-                                                 AutomationProperties.Name="Весь трафик (TUN)" ToolTip="Весь трафик компьютера идёт через VPN (нужна служба Tempest VPN)">
+                                                 AutomationProperties.Name="Весь трафик (TUN)" ToolTip="Весь трафик компьютера идёт через VPN (нужна служба The Cup of Tea)">
                                         <StackPanel Orientation="Horizontal">
                                             <ui:SymbolIcon Symbol="Globe24" FontSize="16" />
                                             <TextBlock Text="Весь трафик (TUN)" Margin="8,0,0,0" />
@@ -369,7 +369,7 @@
                                 <ui:Button Content="Из файла" Icon="{ui:SymbolIcon DocumentAdd24}" Margin="8,0,0,0" Command="{Binding ImportFileCommand}"
                                            ToolTip="Текстовый файл со ссылками или картинка с QR-кодом" />
                                 <ui:Button Icon="{ui:SymbolIcon QrCode24}" Margin="8,0,0,0" Command="{Binding ImportQrScreenCommand}" AutomationProperties.Name="QR с экрана"
-                                           ToolTip="Найти QR-код на экране и добавить сервер (окно Tempest VPN на секунду свернётся)" />
+                                           ToolTip="Найти QR-код на экране и добавить сервер (окно The Cup of Tea на секунду свернётся)" />
                                 <ui:Button Content="Пинг" Icon="{ui:SymbolIcon Pulse24}" Margin="8,0,0,0" Command="{Binding CheckDelaysCommand}"
                                            ToolTip="Задержка через каждый сервер (настоящий запрос через VPN)" />
                             </WrapPanel>
@@ -702,7 +702,7 @@
                                             <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="PlugConnected24" FontSize="18" /></ContentControl>
                                             <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
                                                 <TextBlock Text="Подключаться автоматически" Style="{StaticResource Title}" />
-                                                <TextBlock Text="При запуске Tempest VPN и в любой сети, кроме доверенных. Если вы сами включили или выключили VPN, в этой сети автоматика больше не вмешивается." Style="{StaticResource Sub}" />
+                                                <TextBlock Text="При запуске The Cup of Tea и в любой сети, кроме доверенных. Если вы сами включили или выключили VPN, в этой сети автоматика больше не вмешивается." Style="{StaticResource Sub}" />
                                             </StackPanel>
                                             <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding AutoConnect}" AutomationProperties.Name="Подключаться автоматически" VerticalAlignment="Center" />
                                         </Grid>
@@ -784,7 +784,7 @@
                                             <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="Alert24" FontSize="18" /></ContentControl>
                                             <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
                                                 <TextBlock Text="Уведомления" Style="{StaticResource Title}" />
-                                                <TextBlock Text="Подключено, связь прервалась и восстановлена, ошибка — у часов, если окно Tempest VPN не на переднем плане" Style="{StaticResource Sub}" />
+                                                <TextBlock Text="Подключено, связь прервалась и восстановлена, ошибка — у часов, если окно The Cup of Tea не на переднем плане" Style="{StaticResource Sub}" />
                                             </StackPanel>
                                             <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding Notifications}" AutomationProperties.Name="Уведомления" VerticalAlignment="Center" />
                                         </Grid>
@@ -1000,7 +1000,7 @@
                                 <StackPanel MaxWidth="760" HorizontalAlignment="Left"
                                             Visibility="{Binding SettingsPage, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=trusted}">
                                     <TextBlock Style="{StaticResource Sub}" FontSize="14" Margin="0,0,0,14"
-                                               Text="В доверенной сети Tempest VPN не подключается сам, а если включено «Отключать VPN в доверенных сетях» — отключается." />
+                                               Text="В доверенной сети The Cup of Tea не подключается сам, а если включено «Отключать VPN в доверенных сетях» — отключается." />
                                     <DockPanel>
                                         <ui:Button DockPanel.Dock="Right" Content="Доверять этой сети" Icon="{ui:SymbolIcon ShieldCheckmark24}" Margin="8,0,0,0"
                                                    Command="{Binding TrustCurrentNetworkCommand}" />

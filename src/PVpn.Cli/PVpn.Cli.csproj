@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>tempest-cli</AssemblyName>
+    <AssemblyName>cupoftea-cli</AssemblyName>
     <RootNamespace>PVpn.Cli</RootNamespace>
   </PropertyGroup>
 

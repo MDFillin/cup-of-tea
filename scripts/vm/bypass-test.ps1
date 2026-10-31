@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 $setup = 'C:\PVpnSetup'
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $failures = 0
 
 # Запускать без перенаправления *>: в PowerShell 5.1 stderr из ВМ тогда становится ошибкой и прерывает vm.ps1.
@@ -46,7 +46,7 @@ finally { Remove-Item $local -Recurse -Force }
 
 Step 'Профиль hoptest: my-hy2 с портами 443,443 (смена портов без доработки сервера)'
 Guest -AsUser ("$cli remove hoptest 2>`$null | Out-Null; " +
-    "`$l = @(& 'C:\Program Files\Tempest VPN\tempest-cli.exe' export --filter my-hy2) -match '^(hy2|hysteria2)://' | Select-Object -First 1; " +
+    "`$l = @(& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe' export --filter my-hy2) -match '^(hy2|hysteria2)://' | Select-Object -First 1; " +
     "`$l -replace ':443(/?\?)', ':443,443`$1' -replace '#.*$', '#hoptest' | Set-Content $setup\bypass\hop.txt; " +
     "$cli import $setup\bypass\hop.txt; Remove-Item $setup\bypass\hop.txt; $cli list")
 

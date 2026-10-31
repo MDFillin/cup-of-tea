@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>TempestVPN.Service</AssemblyName>
+    <AssemblyName>CupOfTea.Service</AssemblyName>
     <RootNamespace>PVpn.Service</RootNamespace>
   </PropertyGroup>
 

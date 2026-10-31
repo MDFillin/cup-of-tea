@@ -9,7 +9,7 @@ namespace PVpn.Core.Ipc;
 /// </summary>
 public static class IpcConstants
 {
-    public const string PipeName = "tempestvpn";
+    public const string PipeName = "cupoftea";
     public const string ServiceName = Product.Id;
 
     /// <summary>Имя адаптера TUN.</summary>

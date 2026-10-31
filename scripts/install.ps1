@@ -1,14 +1,14 @@
-﻿# Устанавливает или обновляет Tempest VPN: файлы в Program Files, служба TempestVPN (LocalSystem, автозапуск),
+﻿# Устанавливает или обновляет The Cup of Tea: файлы в Program Files, служба CupOfTea (LocalSystem, автозапуск),
 # правило брандмауэра для sing-box (TUN-стек принимает соединения на адаптере TUN), ярлык в «Пуске».
 # Ядра из комплекта (cores-bundled) ставятся, только если они новее уже установленных: обновлённые в программе не откатываются.
 # Установку под прежним именем PVpn снимает (сеть возвращает её служба) и переносит её данные и более новые ядра.
-# Глобальную политику брандмауэра не трогает. Запускать от администратора из папки комплекта (out\TempestVPN)
+# Глобальную политику брандмауэра не трогает. Запускать от администратора из папки комплекта (out\CupOfTea)
 # или установщиком из папки программы (тогда Source = Target).
 #Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
     [string]$Source = $PSScriptRoot,
-    [string]$Target = (Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Tempest VPN'),
+    [string]$Target = (Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'The Cup of Tea'),
     # Кому разрешено управлять службой. По умолчанию — пользователь, вошедший в систему, и те, кому было разрешено раньше.
     [string[]]$UserSid,
     # Журнал установки (его пишет установщик).
@@ -21,16 +21,21 @@ trap { Write-Host "Ошибка: $_`n$($_.ScriptStackTrace)"; break }
 # При запуске через powershell -File значение по умолчанию из $PSScriptRoot бывает пустым.
 if (-not $Source) { $Source = Split-Path -Parent $MyInvocation.MyCommand.Path }
 
-$productName = 'Tempest VPN'
-$serviceName = 'TempestVPN'
-$data = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'TempestVPN'
+$productName = 'The Cup of Tea'
+$serviceName = 'CupOfTea'
+$data = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'CupOfTea'
 $startMenu = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Microsoft\Windows\Start Menu\Programs'
-# Прежнее имя (до пункта H).
-$legacyService = 'PVpn'
-$legacyTarget = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'PVpn'
-$legacyData = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'PVpn'
+# Прежние имена: Tempest VPN и (до неё) PVpn. Их установка снимается, данные и более новые ядра переносятся.
+$legacies = @(
+    @{ Service = 'TempestVPN'; App = 'TempestVPN'; Title = 'Tempest VPN'; Folder = 'Tempest VPN'; Data = 'TempestVPN'; Link = 'Tempest VPN.lnk' },
+    @{ Service = 'PVpn'; App = 'PVpn'; Title = 'PVpn'; Folder = 'PVpn'; Data = 'PVpn'; Link = 'PVpn.lnk' }
+) | ForEach-Object {
+    $_.Target = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) $_.Folder
+    $_.DataDir = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) $_.Data
+    $_
+}
 
-if (-not (Test-Path (Join-Path $Source 'TempestVPN.Service.exe'))) { throw "В $Source нет TempestVPN.Service.exe — сначала scripts\build.ps1" }
+if (-not (Test-Path (Join-Path $Source 'CupOfTea.Service.exe'))) { throw "В $Source нет CupOfTea.Service.exe — сначала scripts\build.ps1" }
 
 function Stop-AppProcess([string]$Name, [string]$Folder) {
     # Запущенный интерфейс держит свои файлы: закрываем его (системный прокси он вернёт при следующем запуске).
@@ -62,30 +67,31 @@ $account = (Get-CimInstance Win32_ComputerSystem).UserName
 if (-not $account) { $account = [Security.Principal.WindowsIdentity]::GetCurrent().Name }
 if (-not $UserSid) {
     $UserSid = @((New-Object Security.Principal.NTAccount($account)).Translate([Security.Principal.SecurityIdentifier]).Value) +
-        (Read-AllowedSids $data) + (Read-AllowedSids $legacyData) | Where-Object { $_ } | Select-Object -Unique
+        (Read-AllowedSids $data) + @($legacies | ForEach-Object { Read-AllowedSids $_.DataDir }) | Where-Object { $_ } | Select-Object -Unique
     Write-Host "Управлять службой сможет: $account$(if (@($UserSid).Count -gt 1) { " и ещё $(@($UserSid).Count - 1)" })"
 }
 
-# ── Прежняя установка PVpn: служба возвращает сеть и удаляется ──
-$legacy = Get-CimInstance Win32_Service -Filter "Name='$legacyService'" -ErrorAction SilentlyContinue
-if ($legacy -or (Test-Path $legacyTarget)) {
-    Write-Host 'Найдена установка под прежним именем PVpn — переношу'
-    Stop-AppProcess 'PVpn' $legacyTarget
+# ── Прежние установки (Tempest VPN, PVpn): служба возвращает сеть и удаляется ──
+foreach ($old in $legacies) {
+    $legacy = Get-CimInstance Win32_Service -Filter "Name='$($old.Service)'" -ErrorAction SilentlyContinue
+    if (-not $legacy -and -not (Test-Path $old.Target)) { continue }
+    Write-Host "Найдена установка под прежним именем $($old.Title) — переношу"
+    Stop-AppProcess $old.App $old.Target
     if ($legacy) {
-        Stop-ServiceAndWait $legacyService | Out-Null
+        Stop-ServiceAndWait $old.Service | Out-Null
         $legacyExe = $legacy.PathName.Trim('"')
         if (Test-Path $legacyExe) { & $legacyExe --repair | Out-Null }
-        sc.exe delete $legacyService | Out-Null
+        sc.exe delete $old.Service | Out-Null
     }
-    Get-NetFirewallRule -Group 'PVpn' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-    Remove-Item (Join-Path $startMenu 'PVpn.lnk') -ErrorAction SilentlyContinue
+    Get-NetFirewallRule -Group $old.Service -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+    Remove-Item (Join-Path $startMenu $old.Link) -ErrorAction SilentlyContinue
     # Журналы и настройки службы переезжают, если у новой их ещё нет.
-    if ((Test-Path $legacyData) -and -not (Test-Path $data)) { Move-Item $legacyData $data }
+    if ((Test-Path $old.DataDir) -and -not (Test-Path $data)) { Move-Item $old.DataDir $data }
 }
 
 # ── Файлы ──
 $existing = Stop-ServiceAndWait $serviceName
-Stop-AppProcess 'TempestVPN' $Target
+Stop-AppProcess 'CupOfTea' $Target
 New-Item -ItemType Directory -Force $Target | Out-Null
 if ((Resolve-Path $Source).Path -ne (Resolve-Path $Target).Path) {
     Write-Host "Копирую файлы в $Target"
@@ -111,7 +117,7 @@ $versions = foreach ($core in @(
         @{ Title = 'sing-box'; Exe = 'sing-box.exe'; License = 'LICENSE-sing-box.txt'; Pattern = 'sing-box version (\d+\.\d+\.\d+)' })) {
     # При равных версиях остаётся уже установленное ядро (оно первое в списке).
     $best = $null
-    foreach ($dir in $cores, (Join-Path $legacyTarget 'cores'), $bundled) {
+    foreach ($dir in @($cores) + @($legacies | ForEach-Object { Join-Path $_.Target 'cores' }) + @($bundled)) {
         $version = Get-CoreVersion (Join-Path $dir $core.Exe) $core.Pattern
         if ($version -and (-not $best -or $version -gt $best.Version)) { $best = @{ Dir = $dir; Version = $version } }
     }
@@ -142,11 +148,18 @@ foreach ($geo in 'geoip.dat', 'geosite.dat') {
 }
 $versions | Set-Content (Join-Path $cores 'VERSIONS.txt') -Encoding utf8
 if (Test-Path $bundled) { Remove-Item $bundled -Recurse -Force }
-if (Test-Path $legacyTarget) { Remove-Item $legacyTarget -Recurse -Force }
-if (Test-Path $legacyData) { Remove-Item $legacyData -Recurse -Force }
+foreach ($old in $legacies) {
+    # Базы geoip/geosite прежней установки (их могло обновить приложение) — если своих ещё нет.
+    foreach ($geo in 'geoip.dat', 'geosite.dat') {
+        $from = Join-Path $old.Target "cores\$geo"
+        if ((Test-Path $from) -and -not (Test-Path (Join-Path $cores $geo))) { Copy-Item $from $cores -Force }
+    }
+    if (Test-Path $old.Target) { Remove-Item $old.Target -Recurse -Force }
+    if (Test-Path $old.DataDir) { Remove-Item $old.DataDir -Recurse -Force }
+}
 
 # ── Ярлык в меню «Пуск» для всех пользователей ──
-$app = Join-Path $Target 'TempestVPN.exe'
+$app = Join-Path $Target 'CupOfTea.exe'
 if (Test-Path $app) {
     $shell = New-Object -ComObject WScript.Shell
     $link = $shell.CreateShortcut((Join-Path $startMenu "$productName.lnk"))
@@ -164,7 +177,7 @@ Get-NetFirewallRule -Group $serviceName -ErrorAction SilentlyContinue | Remove-N
 New-NetFirewallRule -DisplayName "$productName sing-box (TUN)" -Group $serviceName -Direction Inbound -Action Allow -Profile Any `
     -Program (Join-Path $cores 'sing-box.exe') | Out-Null
 
-$binary = '"' + (Join-Path $Target 'TempestVPN.Service.exe') + '"'
+$binary = '"' + (Join-Path $Target 'CupOfTea.Service.exe') + '"'
 if (-not $existing) {
     Write-Host 'Регистрирую службу'
     New-Service -Name $serviceName -BinaryPathName $binary -DisplayName $productName -StartupType Automatic `

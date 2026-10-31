@@ -1,4 +1,4 @@
-﻿# Собирает готовый к установке комплект в out\TempestVPN: интерфейс, служба, tempest-cli, ядра и скрипты установки.
+﻿# Собирает готовый к установке комплект в out\CupOfTea: интерфейс, служба, cupoftea-cli, ядра и скрипты установки.
 # Ядра лежат в cores-bundled: install.ps1 ставит их, только если они новее уже установленных.
 # Сборка self-contained: на целевом ПК .NET не нужен. Установщик из комплекта собирает build-setup.ps1.
 #Requires -Version 5.1
@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 # При запуске через powershell -File значение по умолчанию из $PSScriptRoot бывает пустым.
 if (-not $PSScriptRoot) { $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
-if (-not $Out) { $Out = Join-Path $PSScriptRoot '..\out\TempestVPN' }
+if (-not $Out) { $Out = Join-Path $PSScriptRoot '..\out\CupOfTea' }
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $cores = Join-Path $root 'cores'
 if (-not (Test-Path (Join-Path $cores 'xray.exe'))) { & (Join-Path $PSScriptRoot 'fetch-cores.ps1') }

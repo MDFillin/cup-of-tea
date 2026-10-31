@@ -1,4 +1,4 @@
-<!-- Палитра и стили Tempest VPN (только тёмная тема). Поверх тёмной темы WPF-UI: её элементы (кнопки, поля, переключатели) остаются. -->
+<!-- Палитра и стили The Cup of Tea (только тёмная тема). Поверх тёмной темы WPF-UI: её элементы (кнопки, поля, переключатели) остаются. -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">

@@ -26,7 +26,7 @@ public sealed class SplitList
     public List<string> Domains { get; set; } = [];
 }
 
-/// <summary>Настройки интерфейса (без секретов) в %APPDATA%\TempestVPN\settings.json.</summary>
+/// <summary>Настройки интерфейса (без секретов) в %APPDATA%\CupOfTea\settings.json.</summary>
 public sealed class AppSettings
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };

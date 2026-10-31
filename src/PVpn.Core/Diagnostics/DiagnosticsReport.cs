@@ -13,7 +13,7 @@ namespace PVpn.Core.Diagnostics;
 /// </summary>
 public static partial class DiagnosticsReport
 {
-    /// <summary>Сеть: физический адаптер, маршруты по умолчанию, другие VPN, системный прокси (как «tempest-cli netinfo»).</summary>
+    /// <summary>Сеть: физический адаптер, маршруты по умолчанию, другие VPN, системный прокси (как «cupoftea-cli netinfo»).</summary>
     public static string Network(string tunName)
     {
         var sb = new StringBuilder();

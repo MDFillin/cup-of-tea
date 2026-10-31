@@ -1,7 +1,7 @@
-# Tempest VPN — личный VPN-клиент для Windows
+# The Cup of Tea — личный VPN-клиент для Windows
 
-Рабочее имя кода — PVpn (проекты и пространства имён). Всё, что видит Windows и пользователь, называется Tempest VPN:
-`TempestVPN.exe`, служба и адаптер TUN `TempestVPN`, `tempest-cli.exe`, папки `%APPDATA%\TempestVPN`, `C:\ProgramData\TempestVPN`
+Рабочее имя кода — PVpn (проекты и пространства имён). Всё, что видит Windows и пользователь, называется The Cup of Tea:
+`CupOfTea.exe`, служба и адаптер TUN `CupOfTea`, `cupoftea-cli.exe`, папки `%APPDATA%\CupOfTea`, `C:\ProgramData\CupOfTea`
 (имена — `src/PVpn.Core/Product.cs`). Значок — молния (`scripts/make-icons.ps1`).
 
 Архитектура и план MVP: [`D:\vpn\plan\client-windows.md`](../plan/client-windows.md).
@@ -11,8 +11,8 @@
 scripts\fetch-cores.ps1          # sing-box 1.14.4 и Xray 26.10.21 с GitHub, проверка SHA256 → cores\
 dotnet build
 dotnet test                      # юнит-тесты + проверка конфигов настоящими ядрами
-scripts\build.ps1                # самодостаточный комплект out\TempestVPN (служба, CLI, ядра, скрипты)
-scripts\build-setup.ps1          # установщик out\TempestVPN-Setup-<версия>.exe (Inno Setup 6)
+scripts\build.ps1                # самодостаточный комплект out\CupOfTea (служба, CLI, ядра, скрипты)
+scripts\build-setup.ps1          # установщик out\CupOfTea-Setup-<версия>.exe (Inno Setup 6)
 ```
 Нужен .NET 10 SDK; для установщика — Inno Setup 6 (`winget install JRSoftware.InnoSetup`). Скрипты `.ps1` сохраняются в UTF-8 **с BOM** (иначе Windows PowerShell 5.1 ломает кириллицу).
 
@@ -20,12 +20,12 @@ scripts\build-setup.ps1          # установщик out\TempestVPN-Setup-<в
 - `src\PVpn.Core` — разбор ссылок `vless://` и `hy2://`, генераторы конфигов Xray и sing-box, запуск ядер
   (конфиг через stdin, Job Object, штатная остановка через Ctrl+C), определение физического адаптера и конфликтов
   с другими VPN, маршруты, kill switch на WFP, пинг, системный прокси (WinINET), профили под DPAPI, клиент службы.
-- `src\PVpn.Service` — служба TempestVPN (LocalSystem): канал `\\.\pipe\tempestvpn`, TUN-сессия, kill switch, сторож ядер и связи,
-  переход на новую сеть, тестовый режим с автоотключением, восстановление сети после сбоя (`TempestVPN.Service.exe --repair`).
-- `src\PVpn.Cli` (`tempest-cli.exe`) — консольный помощник: `import`, `list`, `check`, `test`, `proxy`, `ping`, `netinfo`,
+- `src\PVpn.Service` — служба CupOfTea (LocalSystem): канал `\\.\pipe\cupoftea`, TUN-сессия, kill switch, сторож ядер и связи,
+  переход на новую сеть, тестовый режим с автоотключением, восстановление сети после сбоя (`CupOfTea.Service.exe --repair`).
+- `src\PVpn.Cli` (`cupoftea-cli.exe`) — консольный помощник: `import`, `list`, `check`, `test`, `proxy`, `ping`, `netinfo`,
   `svc …` (управление службой), `killswitch [off]`.
 
-## Интерфейс (`TempestVPN.exe`)
+## Интерфейс (`CupOfTea.exe`)
 `src\PVpn.App` — WPF (.NET 10, WPF-UI, MVVM Toolkit), значок в трее, один экземпляр. Работает без прав администратора:
 режим TUN — через службу, режим прокси — сам (xray + системный прокси, восстанавливается при выходе и после сбоя).
 Только тёмная тема (палитра и стили — `Theme.xaml`), интерфейс растёт вместе с окном (рисуется под 1100×720).
@@ -73,16 +73,16 @@ CLI: `sub add <url> [--name N]`, `sub list`, `sub update [<имя>]`, `sub remov
 подключается сам, если сеть не в доверенных, и отключается в доверенной. Ручное включение или выключение в этой сети
 отменяет автоматику до смены сети. Перед автоподключением — проверка как у Windows (NCSI, msftconnecttest.com):
 если сеть просит войти, программа ждёт; кнопка «Войти в сеть» отключает VPN (kill switch закрыл бы страницу входа),
-открывает страницу входа и подключается сам, когда появится интернет. `tempest-cli netinfo` показывает сети и состояние.
+открывает страницу входа и подключается сам, когда появится интернет. `cupoftea-cli netinfo` показывает сети и состояние.
 ```powershell
-TempestVPN.exe --tray                                        # запуск в трей (так его ставит автозапуск)
-TempestVPN.exe --snapshot ui.png --tab 3 [--sub dns] [--width 1600 --height 1000]  # разработка: окно в PNG и выйти
+CupOfTea.exe --tray                                        # запуск в трей (так его ставит автозапуск)
+CupOfTea.exe --snapshot ui.png --tab 3 [--sub dns] [--width 1600 --height 1000]  # разработка: окно в PNG и выйти
 scripts\make-icons.ps1                                 # перерисовать значки (src\PVpn.App\Assets)
 ```
 
 ## Установка
-`TempestVPN-Setup-<версия>.exe` — один запрос UAC. Файлы копирует Inno Setup, остальное делает `install.ps1`
-(его можно запустить и вручную от администратора из `out\TempestVPN`): служба TempestVPN, правило брандмауэра
+`CupOfTea-Setup-<версия>.exe` — один запрос UAC. Файлы копирует Inno Setup, остальное делает `install.ps1`
+(его можно запустить и вручную от администратора из `out\CupOfTea`): служба CupOfTea, правило брандмауэра
 для sing-box, ярлык в «Пуске», доступ к службе для вошедшего пользователя. Ядра из комплекта (`cores-bundled`)
 ставятся, только если они новее установленных (по ответу `version`): обновлённые в программе ядра не откатываются.
 Установка под прежним именем PVpn снимается (её служба возвращает сеть), её более новые ядра и журналы службы
@@ -93,11 +93,11 @@ scripts\make-icons.ps1                                 # перерисоват�
 
 ## Режим TUN (служба)
 ```powershell
-tempest-cli svc connect my-hy2 --test 120       # тестовое подключение: само отключится через 120 с без confirm
-tempest-cli svc confirm                         # оставить подключение
-tempest-cli svc status | disconnect | repair | logs
-tempest-cli svc cores [check|update|rollback]   # версии ядер; проверить, обновить с GitHub, откатить
-"C:\Program Files\Tempest VPN\e2e-check.ps1"   # проверки приёмки при подключённом TUN
+cupoftea-cli svc connect my-hy2 --test 120       # тестовое подключение: само отключится через 120 с без confirm
+cupoftea-cli svc confirm                         # оставить подключение
+cupoftea-cli svc status | disconnect | repair | logs
+cupoftea-cli svc cores [check|update|rollback]   # версии ядер; проверить, обновить с GitHub, откатить
+"C:\Program Files\The Cup of Tea\e2e-check.ps1"   # проверки приёмки при подключённом TUN
 ```
 Обновление ядер (раздел «Ядра» в настройках или `svc cores`) делает служба: только официальные релизы XTLS/Xray-core
 и SagerNet/sing-box (последний стабильный), архив — только с GitHub по HTTPS, его SHA256 сверяется с тем, что указывает
@@ -130,8 +130,8 @@ scripts\vm\h-test.ps1 -Setup <exe> -OldCoresSetup <exe>       # установщ
 
 ## Режим прокси
 ```powershell
-tempest-cli import <файл со ссылками> --filter my-
-tempest-cli test --all                         # внешний IP и задержка по каждому серверу
-tempest-cli proxy my-hy2 --system-proxy        # SOCKS 127.0.0.1:10828, HTTP 10829 + системный прокси
+cupoftea-cli import <файл со ссылками> --filter my-
+cupoftea-cli test --all                         # внешний IP и задержка по каждому серверу
+cupoftea-cli proxy my-hy2 --system-proxy        # SOCKS 127.0.0.1:10828, HTTP 10829 + системный прокси
 ```
 Порты 10808/10809 не используются: их часто занимают другие VPN-клиенты. Занятый порт заменяется свободным.

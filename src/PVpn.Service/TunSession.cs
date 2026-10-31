@@ -47,7 +47,7 @@ internal sealed class TunSession
         this.options = options;
         this.cores = cores;
         this.log = log;
-        SocksCredential = new NetworkCredential("tempest", Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
+        SocksCredential = new NetworkCredential("cupoftea", Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
         sanitizer = new LogSanitizer([.. profile.Secrets, SocksCredential.Password]);
     }
 

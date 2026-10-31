@@ -160,11 +160,11 @@ public class ServerConfigTests
         // После служебных (DNS, inboundTag), но раньше маршрутов сервера.
         Assert.True(rules.Take(mine.i).All(r => r!["inboundTag"] != null || (string?)r["port"] == "53"));
         if (mode == SplitTunnelMode.ExcludeSelected)
-            Assert.Equal("tempest-direct", (string?)mine.r!["outboundTag"]);
+            Assert.Equal("own-direct", (string?)mine.r!["outboundTag"]);
         else
         {
             Assert.Equal("auto", (string?)mine.r!["balancerTag"]);
-            Assert.Equal("tempest-direct", (string?)rules[mine.i + 1]!["outboundTag"]);
+            Assert.Equal("own-direct", (string?)rules[mine.i + 1]!["outboundTag"]);
         }
         Assert.Equal([ServerConfigs.SocksInbound, ServerConfigs.HttpInbound], c["inbounds"]!.AsArray().Select(i => (string?)i!["tag"]));
     }

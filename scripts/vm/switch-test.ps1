@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $failures = 0
 
 function Guest([string]$Command, [switch]$AsUser, [int]$TimeoutSec = 180) { & $vm run -Command $Command -AsUser:$AsUser -TimeoutSec $TimeoutSec }
@@ -25,7 +25,7 @@ function Ui([string[]]$Steps) { & (Join-Path $PSScriptRoot 'ui-test.ps1') -ShotD
 function Server { $s = (Guest -AsUser "$cli svc status") -join ' '; if ($s -notmatch 'Состояние: Connected') { 'не подключено' } elseif ($s -match 'Сервер: (?:\S+ )?(my-[\w-]+)') { $Matches[1] } else { '?' } }
 function Connects { @(Guest -AsUser "@($cli svc logs) -match 'Подключение: '").Count }
 
-Guest -AsUser "Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force; $cli svc disconnect | Out-Null; Remove-Item C:\PVpnSetup\ui.log, C:\Users\pvpn\AppData\Roaming\TempestVPN\settings.json -ErrorAction SilentlyContinue" | Out-Null
+Guest -AsUser "Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force; $cli svc disconnect | Out-Null; Remove-Item C:\PVpnSetup\ui.log, C:\Users\pvpn\AppData\Roaming\CupOfTea\settings.json -ErrorAction SilentlyContinue" | Out-Null
 
 Step 'VPN выключен: двойной щелчок подключает'
 Ui 'start', 'tun', 'dblclick:my-xhttp', 'wait:12'
@@ -68,6 +68,6 @@ $b = ProxyPorts
 Result 'двойной щелчок подключает и переключает' ($a -eq '443' -and $b -eq '8443') "my-xhttp → порты $a; my-vision → порты $b"
 
 Ui 'connect', 'wait:3', 'tun'
-Guest -AsUser 'Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force' | Out-Null
+Guest -AsUser 'Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force' | Out-Null
 Write-Host "`nПровалено проверок: $failures"
 exit $failures

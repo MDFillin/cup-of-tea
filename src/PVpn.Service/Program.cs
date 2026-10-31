@@ -7,9 +7,9 @@ using PVpn.Core.Cores;
 using PVpn.Core.Ipc;
 using PVpn.Service;
 
-// TempestVPN.Service.exe              — служба Windows (или консольный режим при запуске вручную от администратора)
-// TempestVPN.Service.exe --repair     — вернуть сеть в исходное состояние и выйти
-// TempestVPN.Service.exe --ctrl-c PID — (служебное) послать Ctrl+C ядру, см. ConsoleSignal
+// CupOfTea.Service.exe              — служба Windows (или консольный режим при запуске вручную от администратора)
+// CupOfTea.Service.exe --repair     — вернуть сеть в исходное состояние и выйти
+// CupOfTea.Service.exe --ctrl-c PID — (служебное) послать Ctrl+C ядру, см. ConsoleSignal
 if (args is ["--ctrl-c", var pidText] && int.TryParse(pidText, out var targetPid))
     return ConsoleSignal.SendCtrlC(targetPid) ? 0 : 1;
 

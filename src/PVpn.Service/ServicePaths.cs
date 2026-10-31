@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace PVpn.Service;
 
-/// <summary>Данные службы в C:\ProgramData\TempestVPN. Доступ только у SYSTEM и администраторов.</summary>
+/// <summary>Данные службы в C:\ProgramData\CupOfTea. Доступ только у SYSTEM и администраторов.</summary>
 internal static class ServicePaths
 {
     public static string DataDir => Product.DataDir(Environment.SpecialFolder.CommonApplicationData);

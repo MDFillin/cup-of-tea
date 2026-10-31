@@ -15,7 +15,7 @@ $vm = Join-Path $PSScriptRoot 'vm.ps1'
 $dir = 'C:\PVpnSetup\sub'
 $url = 'http://127.0.0.1:18080/sub/test-token'
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $failures = 0
 
 # Запускать без перенаправления *>: в PowerShell 5.1 stderr из ВМ тогда становится ошибкой и прерывает vm.ps1.
@@ -89,20 +89,20 @@ $out = PvpnCli 'sub update'
 Result 'снова работает' ($out -match 'обновлено' -and (PvpnCli 'sub list') -notmatch 'ошибка') ($out -replace '\s+', ' ')
 
 Step 'Интерфейс: подписка в настройках, название у серверов'
-Guest -AsUser 'Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force; Remove-Item C:\PVpnSetup\ui.log -ErrorAction SilentlyContinue' | Out-Null
+Guest -AsUser 'Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force; Remove-Item C:\PVpnSetup\ui.log -ErrorAction SilentlyContinue' | Out-Null
 & (Join-Path $PSScriptRoot 'ui-test.ps1') -ShotDir (Join-Path $env:TEMP 'pvpn-ui') -Steps 'start', 'wait:2', 'tab:1', 'dump', 'shot:sub-servers', 'open:subs', 'dump', 'shot:sub-settings' | Out-Null
 $ui = (Guest -AsUser "Get-Content C:\PVpnSetup\ui.log -Encoding UTF8") -join "`n"
 Result 'серверы в группе подписки' ($ui -match '(?m)^\s+sub-test\s*$') ''
 Result 'подписка в настройках' ($ui -match 'трафик 3 из 10 ГБ' -and $ui -match 'серверов \d+') ''
 
 function App([string[]]$Steps) { & (Join-Path $PSScriptRoot 'ui-test.ps1') -ShotDir (Join-Path $env:TEMP 'pvpn-ui') -Steps $Steps | Out-Null }
-function StopApp { Guest -AsUser 'Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 1' | Out-Null }
+function StopApp { Guest -AsUser 'Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 1' | Out-Null }
 
 Step 'Автообновление в программе: подписке пора обновиться, панель убрала sub-my-vision'
 StopApp
 Body -Skip 'my-vision' | ForEach-Object { "  $_" }
 # Последняя попытка — «давно»: правим зашифрованный profiles.dat от имени pvpn (DPAPI).
-Guest -AsUser ("Add-Type -AssemblyName System.Security; `$f = 'C:\Users\pvpn\AppData\Roaming\TempestVPN\profiles.dat'; " +
+Guest -AsUser ("Add-Type -AssemblyName System.Security; `$f = 'C:\Users\pvpn\AppData\Roaming\CupOfTea\profiles.dat'; " +
     "`$e = [Text.Encoding]::UTF8.GetBytes('PVpn.profiles.v1'); " +
     "`$j = [Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes(`$f), `$e, 'CurrentUser')); " +
     "`$j = `$j -replace '(LastAttempt.: .)[0-9T:.+-]+', '`${1}2020-01-01T00:00:00+00:00'; " +

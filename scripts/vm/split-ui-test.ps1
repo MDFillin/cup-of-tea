@@ -21,7 +21,7 @@ $system = 'C:\Windows\System32\curl.exe'
 $app = 'C:\SplitTest\app-1.0.1\curl.exe'
 
 Write-Host '=== Подготовка: чистые настройки pvpn и запущенная «программа» C:\SplitTest\app-1.0.1\pinger.exe' -ForegroundColor Cyan
-Guest ("Get-Process TempestVPN, pinger -ErrorAction SilentlyContinue | Stop-Process -Force; Remove-Item C:\Users\pvpn\AppData\Roaming\TempestVPN\settings.json -ErrorAction SilentlyContinue; " +
+Guest ("Get-Process CupOfTea, pinger -ErrorAction SilentlyContinue | Stop-Process -Force; Remove-Item C:\Users\pvpn\AppData\Roaming\CupOfTea\settings.json -ErrorAction SilentlyContinue; " +
     "New-Item -ItemType Directory -Force C:\SplitTest\app-1.0.1 | Out-Null; Copy-Item C:\Windows\System32\curl.exe C:\SplitTest\app-1.0.1\curl.exe -Force; " +
     "Copy-Item C:\Windows\System32\PING.EXE C:\SplitTest\app-1.0.1\pinger.exe -Force; " +
     "Register-ScheduledTask -TaskName PVpnPinger -Force -Action (New-ScheduledTaskAction -Execute 'C:\SplitTest\app-1.0.1\pinger.exe' -Argument '-t 127.0.0.1') " +
@@ -49,7 +49,7 @@ Check 'curl из папки pinger' $app 'https://api.ipify.org' 'direct'
 Check 'сайт icanhazip.com' $system 'https://icanhazip.com' 'direct'
 
 Ui 'connect', 'wait:6'
-Guest 'Get-Content C:\Users\pvpn\AppData\Roaming\TempestVPN\settings.json; Get-Process pinger -ErrorAction SilentlyContinue | Stop-Process -Force'
+Guest 'Get-Content C:\Users\pvpn\AppData\Roaming\CupOfTea\settings.json; Get-Process pinger -ErrorAction SilentlyContinue | Stop-Process -Force'
 Write-Host '=== журнал UI'
 Guest 'Get-Content C:\PVpnSetup\ui.log -Encoding UTF8 | Select-String ''^---|мимо VPN|через VPN|Применить|Подключено|Отключено|Discord|pinger|SplitTest|icanhazip|напрямую'' | ForEach-Object Line'
 Write-Host "`nПровалено проверок: $failures"

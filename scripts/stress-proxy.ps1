@@ -1,5 +1,5 @@
 ﻿# Нагрузочная проверка режима прокси: последовательные и параллельные запросы плюс скачивание через SOCKS.
-# Запуск: scripts\stress-proxy.ps1 -Profile my-xhttp   (профиль должен быть импортирован в tempest-cli)
+# Запуск: scripts\stress-proxy.ps1 -Profile my-xhttp   (профиль должен быть импортирован в cupoftea-cli)
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$Profile,
@@ -9,7 +9,7 @@ param(
     [switch]$NoFragment
 )
 $ErrorActionPreference = 'Stop'
-$cli = Join-Path $PSScriptRoot '..\src\PVpn.Cli\bin\Debug\net10.0-windows\tempest-cli.exe'
+$cli = Join-Path $PSScriptRoot '..\src\PVpn.Cli\bin\Debug\net10.0-windows\cupoftea-cli.exe'
 $out = Join-Path ([IO.Path]::GetTempPath()) "pvpn-stress-$PID.out"
 $cliArgs = @('proxy', $Profile, '--seconds', '300')
 if ($NoFragment) { $cliArgs += '--no-fragment' }

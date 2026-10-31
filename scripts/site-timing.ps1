@@ -1,5 +1,5 @@
 ﻿# Замер открытия сайтов через текущее подключение (curl): DNS, TCP, TLS и первый байт по каждому сайту.
-# Запускать при включённом VPN. Сравнить два случая: окно Tempest VPN открыто и процесс TempestVPN.exe
+# Запускать при включённом VPN. Сравнить два случая: окно The Cup of Tea открыто и процесс CupOfTea.exe
 # снят в диспетчере задач (служба при этом держит подключение).
 # Пример: powershell -ExecutionPolicy Bypass -File scripts\site-timing.ps1 -Rounds 3
 [CmdletBinding()]
@@ -26,5 +26,5 @@ $rows = foreach ($round in 1..$Rounds) {
     }
 }
 $rows | Format-Table -AutoSize
-$tun = Get-NetAdapter -Name TempestVPN -ErrorAction SilentlyContinue
-"Адаптер TUN: $(if ($tun) { $tun.Status } else { 'нет' }); окно Tempest VPN: $(if (Get-Process TempestVPN -ErrorAction SilentlyContinue) { 'запущено' } else { 'закрыто' })"
+$tun = Get-NetAdapter -Name CupOfTea -ErrorAction SilentlyContinue
+"Адаптер TUN: $(if ($tun) { $tun.Status } else { 'нет' }); окно The Cup of Tea: $(if (Get-Process CupOfTea -ErrorAction SilentlyContinue) { 'запущено' } else { 'закрыто' })"

@@ -14,7 +14,7 @@ using PVpn.Core.Sessions;
 using PVpn.Core.SystemProxy;
 
 Console.OutputEncoding = Encoding.UTF8;
-// Серверы и настройки из папок PVpn (до переименования) — в папки Tempest VPN.
+// Серверы и настройки из папок PVpn (до переименования) — в папки The Cup of Tea.
 LegacyData.MigrateUserData();
 
 if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
@@ -53,7 +53,7 @@ catch (Exception e) when (e is LinkParseException or ConfigException or InvalidO
 }
 
 static void PrintHelp() => Console.WriteLine("""
-    tempest-cli — консольный помощник Tempest VPN (разработка и диагностика)
+    cupoftea-cli — консольный помощник The Cup of Tea (разработка и диагностика)
 
       import <файл> [--filter <префикс>]   импорт ссылок vless:// и hy2:// из файла («-» — из stdin)
       list                                 список серверов
@@ -122,7 +122,7 @@ static CorePaths Cores() => CorePaths.Resolve(allowDevFallback: true);
 static Profile RequireProfile(ProfileData data, string? name)
 {
     if (name == null)
-        throw new InvalidOperationException("Укажите имя сервера (tempest-cli list)");
+        throw new InvalidOperationException("Укажите имя сервера (cupoftea-cli list)");
     return data.Find(name) ?? throw new InvalidOperationException($"Сервер «{name}» не найден");
 }
 
@@ -168,7 +168,7 @@ static async Task<int> Sub(string[] args)
         }
         case "list":
             if (data.Subscriptions.Count == 0)
-                Console.WriteLine("Подписок нет. Добавить: tempest-cli sub add <url>");
+                Console.WriteLine("Подписок нет. Добавить: cupoftea-cli sub add <url>");
             foreach (var s in data.Subscriptions)
             {
                 var count = data.Profiles.Count(p => p.SubscriptionId == s.Id);
@@ -225,7 +225,7 @@ static int List()
 {
     var data = new ProfileStore().Load();
     if (data.Profiles.Count == 0)
-        Console.WriteLine("Серверов нет. Импорт: tempest-cli import <файл>");
+        Console.WriteLine("Серверов нет. Импорт: cupoftea-cli import <файл>");
     foreach (var p in data.Profiles)
         Console.WriteLine($"  {p.Name,-22} {p.ProtocolLabel,-22} {p.Host}:{p.Port} ({p.Transport.ToString().ToUpperInvariant()})");
     return 0;
@@ -249,7 +249,7 @@ static (JsonObject Xray, JsonObject? SingBox) BuildConfigs(Profile p, bool tun)
         return (XrayConfigBuilder.Build(p, new XrayOptions { Mode = XrayMode.Proxy, SocksPort = 10808, HttpPort = 10809, BindInterface = bind }), null);
 
     var server = IPAddress.TryParse(p.Host, out var ip) ? ip : Dns.GetHostAddresses(p.Host).First(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-    var (user, pass, port) = ("tempest", Guid.NewGuid().ToString("N"), Ports.GetFreeLoopbackPort());
+    var (user, pass, port) = ("cupoftea", Guid.NewGuid().ToString("N"), Ports.GetFreeLoopbackPort());
     var xray = XrayConfigBuilder.Build(p, new XrayOptions
     {
         Mode = XrayMode.TunBackend,

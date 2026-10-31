@@ -1,4 +1,4 @@
-﻿# Раздельное туннелирование в тестовой ВМ (через tempest-cli, без интерфейса).
+﻿# Раздельное туннелирование в тестовой ВМ (через cupoftea-cli, без интерфейса).
 # «Программа» — копия curl.exe в C:\SplitTest\app-1.0.1 (как Discord в папке версии), правило — по папке C:\SplitTest.
 # Перед запуском: deploy-and-test.ps1 (служба и ссылки в ВМ).
 [CmdletBinding()]
@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $failures = 0
 
 function Step([string]$Text) { Write-Host "`n=== $Text" -ForegroundColor Cyan }
@@ -57,6 +57,6 @@ Check 'curl из C:\SplitTest' $app 'https://api.ipify.org' 'vpn'
 Check 'сайт icanhazip.com' $system 'https://icanhazip.com' 'vpn'
 
 Step 'Журнал: перезапуски sing-box были плановыми'
-Guest "$cli svc disconnect; Get-Content (Get-ChildItem C:\ProgramData\TempestVPN\logs | Select-Object -Last 1).FullName -Encoding UTF8 -Tail 120 | Select-String 'Раздельное|неожиданно|не применились|Kill switch' | ForEach-Object Line"
+Guest "$cli svc disconnect; Get-Content (Get-ChildItem C:\ProgramData\CupOfTea\logs | Select-Object -Last 1).FullName -Encoding UTF8 -Tail 120 | Select-String 'Раздельное|неожиданно|не применились|Kill switch' | ForEach-Object Line"
 Write-Host "`nПровалено проверок: $failures"
 exit $failures

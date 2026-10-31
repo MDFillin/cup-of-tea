@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 $vbm = Join-Path (Get-ItemProperty 'HKLM:\SOFTWARE\Oracle\VirtualBox').InstallDir 'VBoxManage.exe'
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $log = 'C:\PVpnSetup\leak.log'
 $events = [System.Collections.Generic.List[object]]::new()
 
@@ -64,8 +64,8 @@ Mark 'ВМ продолжила работу'
 Start-Sleep 40
 Status
 
-Mark 'Убиваю службу TempestVPN'
-Guest 'Stop-Process -Name TempestVPN.Service -Force'
+Mark 'Убиваю службу CupOfTea'
+Guest 'Stop-Process -Name CupOfTea.Service -Force'
 Start-Sleep 25
 Status
 
@@ -83,7 +83,7 @@ foreach ($l in $lines) {
     if ($parts.Count -lt 2) { continue }
     $windows[$current].Add([pscustomobject]@{ Time = [datetime]::Parse($parts[0]); Ip = $parts[1] })
 }
-$serviceKilled = $events.IndexOf('Убиваю службу TempestVPN')
+$serviceKilled = $events.IndexOf('Убиваю службу CupOfTea')
 $protected = @($windows.Keys | Where-Object { $_ -lt $serviceKilled } | ForEach-Object { $windows[$_] })
 $leaks = @($protected | Where-Object { $_.Ip -ne $ExpectedIp -and $_.Ip -ne '-' })
 

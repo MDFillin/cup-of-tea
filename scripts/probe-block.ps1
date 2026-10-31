@@ -6,7 +6,7 @@ param(
     [int]$Requests = 10
 )
 $ErrorActionPreference = 'Stop'
-$cli = Join-Path $PSScriptRoot '..\src\PVpn.Cli\bin\Debug\net10.0-windows\tempest-cli.exe'
+$cli = Join-Path $PSScriptRoot '..\src\PVpn.Cli\bin\Debug\net10.0-windows\cupoftea-cli.exe'
 $out = Join-Path ([IO.Path]::GetTempPath()) "pvpn-probe-$PID.out"
 $proc = Start-Process $cli -ArgumentList 'proxy', $Profile, '--seconds', '300' -WindowStyle Hidden -PassThru -RedirectStandardOutput $out
 try {

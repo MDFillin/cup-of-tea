@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $failures = 0
 
 function Guest([string]$Command, [switch]$AsUser, [int]$TimeoutSec = 180) { & $vm run -Command $Command -AsUser:$AsUser -TimeoutSec $TimeoutSec }
@@ -39,8 +39,8 @@ function TrafficOk([string]$Dump) {
 }
 function State { ((Guest -AsUser "$cli svc status") -join ' ') }
 
-Guest -AsUser ('Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force; Remove-Item C:\PVpnSetup\ui.log, C:\Users\pvpn\AppData\Roaming\TempestVPN\settings.json -ErrorAction SilentlyContinue; ' +
-    'Remove-Item C:\Users\pvpn\Desktop\Tempest-VPN-*.zip -ErrorAction SilentlyContinue') | Out-Null
+Guest -AsUser ('Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force; Remove-Item C:\PVpnSetup\ui.log, C:\Users\pvpn\AppData\Roaming\CupOfTea\settings.json -ErrorAction SilentlyContinue; ' +
+    'Remove-Item C:\Users\pvpn\Desktop\The-Cup-of-Tea-*.zip -ErrorAction SilentlyContinue') | Out-Null
 
 Step 'Скорость и трафик: TUN, загрузка 30 МБ'
 Ui 'start', 'tun', 'select:my-xhttp', 'connect', 'wait:12'
@@ -82,7 +82,7 @@ Ui 'select:my-hy2-renamed', 'edit:my-hy2'
 
 Step 'Сохранить диагностику'
 Ui 'diag'
-$check = (Guest -AsUser ("`$z = Get-ChildItem C:\Users\pvpn\Desktop\Tempest-VPN-*.zip | Select-Object -First 1; if (-not `$z) { 'НЕТ АРХИВА'; return }; " +
+$check = (Guest -AsUser ("`$z = Get-ChildItem C:\Users\pvpn\Desktop\The-Cup-of-Tea-*.zip | Select-Object -First 1; if (-not `$z) { 'НЕТ АРХИВА'; return }; " +
     "Add-Type -AssemblyName System.IO.Compression.FileSystem; `$a = [IO.Compression.ZipFile]::OpenRead(`$z.FullName); " +
     "`$text = (`$a.Entries | ForEach-Object { (New-Object IO.StreamReader (`$_.Open())).ReadToEnd() }) -join ' '; 'файлы: ' + ((`$a.Entries | ForEach-Object Name) -join ', '); `$a.Dispose(); " +
     "`$secrets = @($cli export) | ForEach-Object { if (`$_ -match '://([^@]+)@') { `$Matches[1] -split ':' } } | Where-Object { `$_.Length -ge 4 }; " +
@@ -91,7 +91,7 @@ $check = (Guest -AsUser ("`$z = Get-ChildItem C:\Users\pvpn\Desktop\Tempest-VPN-
 Write-Host ($check -replace '(?m)^', '    ')
 Result 'архив без ключей' ($check -match 'service-log.txt' -and $check -match 'найдено секретов: 0' -and $check -match 'ссылок: 0' -and $check -notmatch 'секретов проверено: 0') ''
 
-Guest -AsUser 'Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force' | Out-Null
+Guest -AsUser 'Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force' | Out-Null
 Guest -AsUser "$cli svc disconnect" | Out-Null
 Write-Host "`nПровалено проверок: $failures"
 exit $failures

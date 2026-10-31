@@ -1,4 +1,4 @@
-﻿# Проверка интерфейса Tempest VPN в тестовой ВМ: запуск TempestVPN.exe в сеансе pvpn, действия через UI Automation
+﻿# Проверка интерфейса The Cup of Tea в тестовой ВМ: запуск CupOfTea.exe в сеансе pvpn, действия через UI Automation
 # (guest\ui-action.ps1 через задачи планировщика — guestcontrol не видит рабочий стол), снимки экрана ВМ.
 # Перед запуском: deploy-and-test.ps1 (служба, интерфейс и ссылки в ВМ).
 #   ui-test.ps1 -Steps 'start','select:my-hy2','connect','wait:15','dump','shot:connected','tab:4','shot:logs','tab:0','connect'
@@ -33,7 +33,7 @@ foreach ($step in $Steps) {
         'start' {
             # Экран ВМ не гаснет, иначе снимок не сделать.
             & $vm run -TimeoutSec 60 -Command 'powercfg /change monitor-timeout-ac 0; powercfg /change standby-timeout-ac 0; Remove-Item C:\PVpnSetup\ui.log -ErrorAction SilentlyContinue'
-            & $vm run -TimeoutSec 60 -Command "Register-ScheduledTask -TaskName PVpnApp -Force -Action (New-ScheduledTaskAction -Execute 'C:\Program Files\Tempest VPN\TempestVPN.exe') -Principal (New-ScheduledTaskPrincipal -UserId pvpn -LogonType Interactive -RunLevel Limited) | Out-Null; Start-ScheduledTask -TaskName PVpnApp"
+            & $vm run -TimeoutSec 60 -Command "Register-ScheduledTask -TaskName PVpnApp -Force -Action (New-ScheduledTaskAction -Execute 'C:\Program Files\The Cup of Tea\CupOfTea.exe') -Principal (New-ScheduledTaskPrincipal -UserId pvpn -LogonType Interactive -RunLevel Limited) | Out-Null; Start-ScheduledTask -TaskName PVpnApp"
             Start-Sleep 6
         }
         'wait' { Start-Sleep ([int]$arg) }

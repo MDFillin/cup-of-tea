@@ -1,4 +1,4 @@
-﻿# Разворачивает сборку out\TempestVPN в тестовой ВМ и проверяет TUN:
+﻿# Разворачивает сборку out\CupOfTea в тестовой ВМ и проверяет TUN:
 #   1) копирует комплект в C:\PVpnSetup и ставит службу (от pvpnadmin);
 #   2) переносит ссылки (по умолчанию my-*) и импортирует их от pvpn, временные файлы удаляет;
 #   3) для каждого профиля: svc connect --test, e2e-check.ps1, svc disconnect (от pvpn).
@@ -11,21 +11,21 @@ param(
     [switch]$SkipDeploy
 )
 $ErrorActionPreference = 'Stop'
-# tempest-cli и PowerShell в ВМ пишут UTF-8.
+# cupoftea-cli и PowerShell в ВМ пишут UTF-8.
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 $root = Split-Path (Split-Path $PSScriptRoot)
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
-$package = Join-Path $root 'out\TempestVPN'
+$package = Join-Path $root 'out\CupOfTea'
 $setup = 'C:\PVpnSetup'
-# copyto кладёт содержимое out\TempestVPN прямо в $setup.
+# copyto кладёт содержимое out\CupOfTea прямо в $setup.
 $guestPackage = $setup
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 
 function Step([string]$Text) { Write-Host "`n=== $Text" -ForegroundColor Cyan }
 
-if (-not (Test-Path (Join-Path $package 'TempestVPN.Service.exe'))) { throw "Нет сборки в $package — сначала scripts\build.ps1" }
+if (-not (Test-Path (Join-Path $package 'CupOfTea.Service.exe'))) { throw "Нет сборки в $package — сначала scripts\build.ps1" }
 
 if (-not $SkipDeploy) {
     Step 'Копирую комплект в ВМ'
@@ -33,13 +33,13 @@ if (-not $SkipDeploy) {
     & $vm copy -Source $package -Dest $setup
 
     Step 'Ставлю службу (pvpnadmin)'
-    & $vm run -Command "& $guestPackage\install.ps1 -Source $guestPackage -UserSid (Get-LocalUser pvpn).SID.Value; Get-Service TempestVPN"
+    & $vm run -Command "& $guestPackage\install.ps1 -Source $guestPackage -UserSid (Get-LocalUser pvpn).SID.Value; Get-Service CupOfTea"
 
     Step "Переношу ссылки $LinkFilter* (pvpn)"
     $name = 'pvpn-links-' + [guid]::NewGuid().ToString('N') + '.txt'
     $hostLinks = Join-Path $env:TEMP $name
     try {
-        & (Join-Path $package 'tempest-cli.exe') export --filter $LinkFilter | Set-Content $hostLinks -Encoding utf8
+        & (Join-Path $package 'cupoftea-cli.exe') export --filter $LinkFilter | Set-Content $hostLinks -Encoding utf8
         & $vm copy -Source $hostLinks -Dest $setup
         & $vm run -AsUser -Command "$cli import $setup\$name; $cli list"
     }

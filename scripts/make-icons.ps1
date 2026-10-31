@@ -1,4 +1,4 @@
-﻿# Рисует значки Tempest VPN (молния на скруглённом квадрате) в src\PVpn.App\Assets: приложение и состояния для трея.
+﻿# Рисует значки The Cup of Tea (молния на скруглённом квадрате) в src\PVpn.App\Assets: приложение и состояния для трея.
 # ICO с PNG-кадрами 16–256 px. Запускать после правки цветов или формы; результат хранится в репозитории.
 Add-Type -AssemblyName System.Drawing
 $assets = Join-Path $PSScriptRoot '..\src\PVpn.App\Assets'

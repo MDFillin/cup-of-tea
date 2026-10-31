@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $vm = Join-Path $PSScriptRoot 'vm.ps1'
 # Команды для ВМ — без двойных кавычек (см. vm.ps1).
-$cli = "& 'C:\Program Files\Tempest VPN\tempest-cli.exe'"
+$cli = "& 'C:\Program Files\The Cup of Tea\cupoftea-cli.exe'"
 $failures = 0
 
 # Запускать без перенаправления *>: в PowerShell 5.1 stderr из ВМ тогда становится ошибкой и прерывает vm.ps1.
@@ -64,8 +64,8 @@ $settings = Join-Path $env:TEMP 'pvpn-dns-settings.json'
 '{ "Dns": { "Provider": "AdGuard" } }' | Set-Content $settings -Encoding ascii
 & $vm copy -Source $settings -Dest C:\PVpnSetup
 Remove-Item $settings
-Guest -AsUser ('Get-Process TempestVPN -ErrorAction SilentlyContinue | Stop-Process -Force; Remove-Item C:\PVpnSetup\ui.log -ErrorAction SilentlyContinue; ' +
-    'Copy-Item C:\PVpnSetup\pvpn-dns-settings.json C:\Users\pvpn\AppData\Roaming\TempestVPN\settings.json -Force')
+Guest -AsUser ('Get-Process CupOfTea -ErrorAction SilentlyContinue | Stop-Process -Force; Remove-Item C:\PVpnSetup\ui.log -ErrorAction SilentlyContinue; ' +
+    'Copy-Item C:\PVpnSetup\pvpn-dns-settings.json C:\Users\pvpn\AppData\Roaming\CupOfTea\settings.json -Force')
 & (Join-Path $PSScriptRoot 'ui-test.ps1') -ShotDir (Join-Path $env:TEMP 'pvpn-ui') -Steps 'start', 'tun', 'select:my-xhttp', 'connect', 'wait:12',
     'dnsleak', 'shot:dns-tun', 'connect', 'wait:5', 'proxy', 'connect', 'wait:8', 'dnsleak', 'shot:dns-proxy',
     'connect', 'wait:3', 'tun' | Out-Null

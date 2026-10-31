@@ -10,7 +10,7 @@ namespace PVpn.Core.Ipc;
 
 public sealed class ServiceUnavailableException(string message, Exception? inner = null) : Exception(message, inner);
 
-/// <summary>Клиент службы (для интерфейса и tempest-cli).</summary>
+/// <summary>Клиент службы (для интерфейса и cupoftea-cli).</summary>
 public sealed partial class ServiceClient
 {
     /// <summary>
