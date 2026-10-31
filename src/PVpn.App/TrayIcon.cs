@@ -37,7 +37,7 @@ internal sealed class TrayIcon : IDisposable
             foreach (var p in vm.Profiles)
             {
                 var id = p.Profile.Id;
-                servers.DropDownItems.Add(new Forms.ToolStripMenuItem(p.Name, null, async (_, _) => await vm.SwitchServerAsync(id))
+                servers.DropDownItems.Add(new Forms.ToolStripMenuItem(PVpn.Core.Profiles.Flags.Strip(p.Profile.Name), null, async (_, _) => await vm.SwitchServerAsync(id))
                 {
                     Checked = vm.SelectedProfile?.Profile.Id == id,
                     ToolTipText = p.Details,

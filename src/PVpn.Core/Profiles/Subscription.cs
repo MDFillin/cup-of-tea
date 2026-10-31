@@ -34,6 +34,9 @@ public sealed record Subscription
     public long Total { get; init; }
     public DateTimeOffset? Expire { get; init; }
 
+    /// <summary>Служебные строки панели вместо серверов: «Использовано 3.43/60 ГБ», «Трафик обхода 6 %».</summary>
+    public IReadOnlyList<string> Notes { get; init; } = [];
+
     public bool IsDue(DateTimeOffset now) =>
         AutoUpdate && (LastAttempt ?? DateTimeOffset.MinValue) < now - (LastError == null ? TimeSpan.FromHours(UpdateIntervalHours) : TimeSpan.FromMinutes(30));
 }
@@ -47,7 +50,11 @@ public sealed record SubscriptionFetch(
     long Upload,
     long Download,
     long Total,
-    DateTimeOffset? Expire);
+    DateTimeOffset? Expire)
+{
+    /// <summary>Служебные строки панели (см. <see cref="Subscription.Notes"/>).</summary>
+    public IReadOnlyList<string> Notes { get; init; } = [];
+}
 
 /// <summary>Итог обновления подписки для сообщения пользователю.</summary>
 public sealed record SubscriptionUpdate(Subscription Subscription, int Added, int Updated, int Removed, int Unsupported, IReadOnlyList<ImportError> Errors)
@@ -67,7 +74,13 @@ public sealed class SubscriptionException(string message) : Exception(message);
 
 public static partial class SubscriptionClient
 {
-    public const int MaxBytes = 2 * 1024 * 1024;
+    public const int MaxBytes = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// С этим User-Agent панели (Remnawave и похожие) отдают не ссылки, а полные конфиги xray — со встроенными
+    /// маршрутами, DNS, фрагментацией и автовыбором. Если панель так не умеет, она всё равно вернёт ссылки.
+    /// </summary>
+    public const string FullConfigUserAgent = "INCY/2.0.0";
 
     /// <summary>
     /// Проверяет адрес подписки: только http(s), без логина в адресе. Возвращает нормализованный адрес.
@@ -101,7 +114,11 @@ public static partial class SubscriptionClient
         HttpResponseMessage response;
         try
         {
-            response = await http.GetAsync(url, ct).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.UserAgent.Clear();
+            request.Headers.UserAgent.ParseAdd(FullConfigUserAgent);
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue($"({Product.Id})"));
+            response = await http.SendAsync(request, ct).ConfigureAwait(false);
         }
         catch (HttpRequestException e)
         {
@@ -133,6 +150,29 @@ public static partial class SubscriptionClient
     {
         if (body.TrimStart().StartsWith('<'))
             throw new SubscriptionException("По ссылке открылась веб-страница, а не список серверов. Скопируйте в панели именно ссылку подписки.");
+        var info = ParseUserInfo(header("subscription-userinfo"));
+        var interval = int.TryParse(header("profile-update-interval")?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var h) && h is >= 1 and <= 168 ? h : (int?)null;
+        var title = DecodeTitle(header("profile-title"));
+
+        if (Config.ServerConfigs.LooksLikeConfigs(body))
+        {
+            Config.ServerConfigImport configs;
+            try
+            {
+                configs = Config.ServerConfigs.ParseMany(body);
+            }
+            catch (Config.ConfigException e)
+            {
+                throw new SubscriptionException(e.Message);
+            }
+            if (configs.Profiles.Count == 0)
+                throw new SubscriptionException(configs.Errors.Count > 0
+                    ? $"Ни один конфиг из подписки не подошёл: {configs.Errors[0].Message}"
+                    : "В подписке не нашлось серверов");
+            return new SubscriptionFetch(new ImportResult(configs.Profiles, configs.Errors), 0, title, interval,
+                info.Upload, info.Download, info.Total, info.Expire) { Notes = configs.Notes };
+        }
+
         // Обычно подписка — base64 от списка ссылок, реже — сам список.
         var text = !body.Contains("://", StringComparison.Ordinal) && LinkParser.TryDecodeBase64(body.Trim(), out var d) ? d : body;
         var result = LinkParser.ParseMany(text);
@@ -144,9 +184,7 @@ public static partial class SubscriptionClient
                 : "В подписке не нашлось ссылок на серверы");
         }
 
-        var info = ParseUserInfo(header("subscription-userinfo"));
-        var interval = int.TryParse(header("profile-update-interval")?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var h) && h is >= 1 and <= 168 ? h : (int?)null;
-        return new SubscriptionFetch(result, unsupported, DecodeTitle(header("profile-title")), interval, info.Upload, info.Download, info.Total, info.Expire);
+        return new SubscriptionFetch(result, unsupported, title, interval, info.Upload, info.Download, info.Total, info.Expire);
     }
 
     /// <summary>«upload=1; download=2; total=3; expire=1700000000» (expire=0 или нет — бессрочно).</summary>
@@ -233,6 +271,7 @@ public static class SubscriptionMerge
             Download = fetch.Download,
             Total = fetch.Total,
             Expire = fetch.Expire,
+            Notes = fetch.Notes,
         };
         data.SetSubscription(updatedSub);
         var removed = old.Count(o => fresh.All(f => f.Id != o.Id));

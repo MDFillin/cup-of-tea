@@ -29,12 +29,17 @@ public static class TrafficSources
         }
     }
 
-    internal static TrafficSample? ParseXray(JsonElement root, string outbound) =>
-        root.TryGetProperty("stats", out var stats) && stats.TryGetProperty("outbound", out var outbounds)
-            ? outbounds.TryGetProperty(outbound, out var o)
-                ? new TrafficSample(Long(o, "uplink"), Long(o, "downlink"))
-                : new TrafficSample(0, 0)
-            : null;
+    internal static TrafficSample? ParseXray(JsonElement root, string outbound)
+    {
+        if (!root.TryGetProperty("stats", out var stats) || !stats.TryGetProperty("outbound", out var outbounds))
+            return null;
+        if (outbounds.TryGetProperty(outbound, out var o))
+            return new TrafficSample(Long(o, "uplink"), Long(o, "downlink"));
+        // У сервера из подписки с автовыбором своего «proxy» нет — считаем всё, что вошло через наш SOCKS.
+        if (stats.TryGetProperty("inbound", out var inbounds) && inbounds.TryGetProperty(Config.ServerConfigs.SocksInbound, out var i))
+            return new TrafficSample(Long(i, "uplink"), Long(i, "downlink"));
+        return new TrafficSample(0, 0);
+    }
 
     private static long Long(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.TryGetInt64(out var n) ? n : 0;
 }

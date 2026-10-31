@@ -26,7 +26,7 @@ $cores = @(
         Version = '26.10.21'
         Url     = 'https://github.com/XTLS/Xray-core/releases/download/v26.10.21/Xray-windows-64.zip'
         Sha256  = 'fc58c39ee2f2717b4c54d28d374362389e5319b20ae44aea76ea45a5243ec827'
-        Files   = @('xray.exe', 'LICENSE')
+        Files   = @('xray.exe', 'LICENSE', 'geoip.dat', 'geosite.dat')
     }
 )
 

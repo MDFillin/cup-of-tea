@@ -131,6 +131,15 @@ $versions = foreach ($core in @(
     Write-Host "Ядро $($core.Title) $($best.Version) ($from)"
     "$($core.Title) $($best.Version)"
 }
+# Базы geoip/geosite для маршрутов серверов из подписок: из комплекта, если их ещё нет
+# (обновление ядра из программы кладёт свежие сама — их не трогаем).
+foreach ($geo in 'geoip.dat', 'geosite.dat') {
+    $from = Join-Path $bundled $geo
+    if ((Test-Path $from) -and -not (Test-Path (Join-Path $cores $geo))) {
+        Copy-Item $from $cores -Force
+        Write-Host "База $geo (из комплекта)"
+    }
+}
 $versions | Set-Content (Join-Path $cores 'VERSIONS.txt') -Encoding utf8
 if (Test-Path $bundled) { Remove-Item $bundled -Recurse -Force }
 if (Test-Path $legacyTarget) { Remove-Item $legacyTarget -Recurse -Force }

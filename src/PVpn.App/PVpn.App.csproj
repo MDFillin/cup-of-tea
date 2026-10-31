@@ -32,6 +32,8 @@
 
   <ItemGroup>
     <Resource Include="Assets\*.ico" />
+    <!-- Флаги стран (Twemoji, CC-BY 4.0): Windows своими шрифтами флаги-эмодзи не рисует. -->
+    <Resource Include="Assets\Flags\*.png" />
   </ItemGroup>
 
 </Project>

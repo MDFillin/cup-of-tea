@@ -6,6 +6,7 @@ namespace PVpn.Core.Profiles;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(VlessProfile), "vless")]
 [JsonDerivedType(typeof(Hysteria2Profile), "hysteria2")]
+[JsonDerivedType(typeof(XrayConfigProfile), "xray-config")]
 public abstract record Profile
 {
     public Guid Id { get; init; } = Guid.NewGuid();
@@ -114,4 +115,33 @@ public sealed record Hysteria2Profile : Profile
     public override ServerTransport Transport => ServerTransport.Udp;
 
     public override IReadOnlyList<string> Secrets => ObfsPassword == null ? [Auth] : [Auth, ObfsPassword];
+}
+
+/// <summary>
+/// Сервер из подписки в виде полного конфига xray: со своими маршрутами, DNS, фрагментацией, автовыбором и цепочками.
+/// Хранится уже очищенным (<see cref="PVpn.Core.Config.ServerConfigs.Sanitize"/>); служба очищает его ещё раз сама.
+/// SourceLink пустой: ссылки у такого сервера нет.
+/// </summary>
+public sealed record XrayConfigProfile : Profile
+{
+    /// <summary>Конфиг xray (JSON): outbounds, routing, dns, observatory; входы и журнал подставляет клиент.</summary>
+    public required string Config { get; init; }
+
+    /// <summary>Протокол основного сервера, например «VLESS XHTTP REALITY».</summary>
+    public required string MainProtocol { get; init; }
+
+    /// <summary>Сколько серверов в автовыборе или цепочке (1 — один сервер).</summary>
+    public int ServerCount { get; init; } = 1;
+
+    /// <summary>Основной сервер работает по UDP (Hysteria2).</summary>
+    public bool Udp { get; init; }
+
+    /// <summary>Описание от панели (meta.serverDescription), например «без списания пакета».</summary>
+    public string? Description { get; init; }
+
+    public override string ProtocolLabel => ServerCount > 1 ? $"{MainProtocol} · автовыбор из {ServerCount}" : MainProtocol;
+
+    public override ServerTransport Transport => Udp ? ServerTransport.Udp : ServerTransport.Tcp;
+
+    public override IReadOnlyList<string> Secrets => PVpn.Core.Config.ServerConfigs.SecretsOf(Config);
 }

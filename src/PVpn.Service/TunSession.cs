@@ -82,7 +82,14 @@ internal sealed class TunSession
     public bool CanSwitchTo(Profile nextProfile, ConnectOptions next) => SingBoxKey(Profile, options) == SingBoxKey(nextProfile, next);
 
     private static string SingBoxKey(Profile p, ConnectOptions o) => System.Text.Json.JsonSerializer.Serialize(
-        o with { Bypass = null, TestSeconds = 0, IgnoreConflicts = false, BlockQuic = BlocksQuic(p, o) }, IpcJsonContext.Default.ConnectOptions);
+        o with { Bypass = null, TestSeconds = 0, IgnoreConflicts = false, BlockQuic = BlocksQuic(p, o), UseServerRouting = DnsViaProxy(p, o) },
+        IpcJsonContext.Default.ConnectOptions);
+
+    /// <summary>У сервера из подписки свой DNS, и его маршруты включены — DNS решает xray (см. SingBoxOptions.DnsViaProxy).</summary>
+    private static bool DnsViaProxy(Profile p, ConnectOptions o) => p is XrayConfigProfile server && o.UseServerRouting && ServerConfigs.HasDns(server);
+
+    /// <summary>IP остальных серверов конфига из подписки (автовыбор, цепочки): их тоже мимо TUN.</summary>
+    private IReadOnlyList<IPAddress> extraServerIps = [];
 
     private static bool BlocksQuic(Profile p, ConnectOptions o) => SingBoxConfigBuilder.BlocksQuic(p, o.BlockQuic);
 
@@ -127,6 +134,7 @@ internal sealed class TunSession
             log.Info($"Адаптер {InterfaceName} остался от прошлого подключения, sing-box использует его");
 
         ServerIp = await ResolveServerAsync(Profile.Host, ct).ConfigureAwait(false);
+        extraServerIps = await ResolveExtraServersAsync(Profile, ServerIp, ct).ConfigureAwait(false);
 
         progress("Прокладываю маршрут к серверу");
         StateJournal.Update(j => j with { Profile = Profile.Name, StartedAt = DateTimeOffset.Now });
@@ -185,6 +193,10 @@ internal sealed class TunSession
     {
         var sw = Stopwatch.StartNew();
         var ip = await ResolveServerAsync(profile.Host, ct).ConfigureAwait(false);
+        var extra = await ResolveExtraServersAsync(profile, ip, ct).ConfigureAwait(false);
+        // sing-box уже исключил из TUN адреса прежних серверов; новые без перезапуска TUN не исключить.
+        if (extra.Except(extraServerIps).Any())
+            throw new SessionException("У нового сервера другие адреса автовыбора — нужен перезапуск TUN");
         Profile = profile;
         options = next;
         sanitizer = new LogSanitizer([.. profile.Secrets, SocksCredential.Password]);
@@ -222,6 +234,7 @@ internal sealed class TunSession
             ServerAddressOverride = ServerIp.ToString(),
             Bypass = options.Bypass ?? BypassOptions.Default,
             MetricsPort = MetricsPort,
+            UseServerRouting = options.UseServerRouting,
         });
         Xray = CoreProcess.Start("xray", cores.Xray, ["run", "-c", "stdin:"], config.ToJsonString(), sanitizer, log.Write);
         if (!await Ports.WaitListeningAsync(SocksPort, TimeSpan.FromSeconds(10), () => Xray.HasExited, ct).ConfigureAwait(false))
@@ -236,7 +249,7 @@ internal sealed class TunSession
             SocksPort = SocksPort,
             SocksUser = SocksCredential.UserName,
             SocksPassword = SocksCredential.Password,
-            ServerAddresses = [ServerIp],
+            ServerAddresses = [ServerIp, .. extraServerIps],
             InterfaceName = InterfaceName,
             Mtu = options.Mtu,
             Stack = options.Stack ?? "gvisor",
@@ -247,6 +260,7 @@ internal sealed class TunSession
             DirectDns = AdapterDns(Physical.Index),
             SplitTunnel = options.SplitTunnel,
             Dns = DnsRules.Resolve(options.Dns),
+            DnsViaProxy = DnsViaProxy(Profile, options),
         });
         // Список адаптеров Windows отдаёт не сразу, пока удаляет прежний адаптер TUN, — это видно здесь.
         if (sw.Elapsed > TimeSpan.FromSeconds(1))
@@ -428,6 +442,29 @@ internal sealed class TunSession
         var removed = route;
         StateJournal.Update(j => j with { Routes = j.Routes.Where(r => r != removed).ToList() });
         route = null;
+    }
+
+    /// <summary>
+    /// Адреса остальных серверов конфига из подписки. Не разрешился какой-то — не беда: xray и так привязан к
+    /// физическому адаптеру, исключение из TUN — лишь дополнительная защита от петли.
+    /// </summary>
+    private static async Task<IReadOnlyList<IPAddress>> ResolveExtraServersAsync(Profile profile, IPAddress main, CancellationToken ct)
+    {
+        if (profile is not XrayConfigProfile server)
+            return [];
+        var hosts = ServerConfigs.ServerHosts(server).Where(h => !string.Equals(h, profile.Host, StringComparison.OrdinalIgnoreCase)).Take(32);
+        var resolved = await Task.WhenAll(hosts.Select(async h =>
+        {
+            try
+            {
+                return await ResolveServerAsync(h, ct).ConfigureAwait(false);
+            }
+            catch (SessionException)
+            {
+                return null;
+            }
+        })).ConfigureAwait(false);
+        return resolved.OfType<IPAddress>().Where(ip => !ip.Equals(main)).Distinct().Order(Comparer<IPAddress>.Create((a, b) => string.CompareOrdinal(a.ToString(), b.ToString()))).ToList();
     }
 
     private static async Task<IPAddress> ResolveServerAsync(string host, CancellationToken ct)

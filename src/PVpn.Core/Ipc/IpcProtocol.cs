@@ -97,6 +97,9 @@ public sealed record ConnectOptions
 
     /// <summary>Раздельное туннелирование; null — выключено. Служба проверяет правила сама.</summary>
     public SplitTunnelOptions? SplitTunnel { get; set; }
+
+    /// <summary>У серверов с конфигом из подписки — их маршруты и DNS (false — всё через сервер).</summary>
+    public bool UseServerRouting { get; set; } = true;
 }
 
 public sealed record IpcRequest
@@ -105,6 +108,9 @@ public sealed record IpcRequest
 
     /// <summary>Ссылка сервера (vless:// или hy2://). Служба разбирает её сама и строит конфиги сама.</summary>
     public string? Link { get; init; }
+
+    /// <summary>Вместо ссылки — полный конфиг сервера из подписки (JSON). Служба очищает его сама.</summary>
+    public string? Config { get; init; }
     public ConnectOptions? Options { get; init; }
 
     /// <summary>Для logs: вернуть строки с номером больше этого.</summary>

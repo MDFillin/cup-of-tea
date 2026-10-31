@@ -86,16 +86,17 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     }
 
     /// <summary>Начинает подключение и сразу возвращает управление.</summary>
-    public IpcResponse BeginConnect(string? link, ConnectOptions? options)
+    public IpcResponse BeginConnect(string? link, string? config, ConnectOptions? options)
     {
-        if (string.IsNullOrWhiteSpace(link))
+        if (string.IsNullOrWhiteSpace(link) && string.IsNullOrWhiteSpace(config))
             return new IpcResponse { Ok = false, Error = "Не передана ссылка сервера" };
         Profile profile;
         try
         {
-            profile = LinkParser.Parse(link);
+            // Конфиг сервера из подписки служба очищает сама (ServerConfigs.Sanitize): клиенту не доверяем.
+            profile = !string.IsNullOrWhiteSpace(config) ? ServerConfigs.ParseRuntime(config) : LinkParser.Parse(link!);
         }
-        catch (LinkParseException e)
+        catch (Exception e) when (e is LinkParseException or ConfigException)
         {
             return new IpcResponse { Ok = false, Error = e.Message };
         }

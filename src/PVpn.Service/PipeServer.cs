@@ -14,7 +14,8 @@ namespace PVpn.Service;
 /// </summary>
 internal sealed class PipeServer(SessionManager manager, CoreUpdateManager coreUpdates, ServiceLog log, ServiceConfig config) : BackgroundService
 {
-    private const int MaxRequestBytes = 64 * 1024;
+    // Конфиг сервера из подписки бывает до сотни-другой КБ.
+    private const int MaxRequestBytes = 1024 * 1024;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -105,7 +106,7 @@ internal sealed class PipeServer(SessionManager manager, CoreUpdateManager coreU
             case IpcCommands.Status:
                 return new IpcResponse { Ok = true, Status = manager.Status };
             case IpcCommands.Connect:
-                return manager.BeginConnect(request.Link, request.Options);
+                return manager.BeginConnect(request.Link, request.Config, request.Options);
             case IpcCommands.Disconnect:
                 await manager.DisconnectAsync("Отключено").ConfigureAwait(false);
                 return new IpcResponse { Ok = true, Status = manager.Status };

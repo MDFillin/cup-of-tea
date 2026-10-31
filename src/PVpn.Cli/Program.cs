@@ -441,7 +441,8 @@ static int Export(string[] args)
     var filter = Option(args, "--filter");
     foreach (var p in new ProfileStore().Load().Profiles)
     {
-        if (filter == null || ProfileData.PlainName(p.Name).StartsWith(filter, StringComparison.OrdinalIgnoreCase))
+        // У серверов с полным конфигом из подписки ссылки нет.
+        if (p.SourceLink.Length > 0 && (filter == null || ProfileData.PlainName(p.Name).StartsWith(filter, StringComparison.OrdinalIgnoreCase)))
             Console.WriteLine(p.SourceLink);
     }
     return 0;
@@ -471,7 +472,13 @@ static async Task<int> Svc(string[] args)
                 SplitTunnel = ReadSplit(args),
                 Dns = ReadDns(args),
             };
-            var started = await client.SendAsync(new IpcRequest { Command = IpcCommands.Connect, Link = p.SourceLink, Options = options }, timeout);
+            var started = await client.SendAsync(new IpcRequest
+            {
+                Command = IpcCommands.Connect,
+                Link = p is XrayConfigProfile ? null : p.SourceLink,
+                Config = (p as XrayConfigProfile)?.Config,
+                Options = options,
+            }, timeout);
             if (!started.Ok)
                 return Fail(started.Error ?? "служба отказала");
 

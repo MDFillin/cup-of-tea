@@ -168,6 +168,8 @@ public sealed partial class CoreUpdater(CorePaths cores, HttpClient http, Action
             await DownloadAsync(release, zip, ct).ConfigureAwait(false);
             var staged = Path.Combine(staging, ExeName(kind));
             Extract(zip, ExeName(kind), staged);
+            // Базы geoip/geosite — из того же проверенного архива: по ним работают маршруты серверов из подписок.
+            var geo = kind == CoreKind.Xray ? GeoFiles.Where(f => TryExtract(zip, f, Path.Combine(staging, f))).ToList() : [];
 
             var reported = await GetVersionAsync(kind, staged, ct).ConfigureAwait(false);
             if (reported != release.Version)
@@ -178,6 +180,17 @@ public sealed partial class CoreUpdater(CorePaths cores, HttpClient http, Action
             async Task Swap()
             {
                 Replace(kind, staged);
+                foreach (var f in geo)
+                {
+                    try
+                    {
+                        File.Copy(Path.Combine(staging, f), Path.Combine(cores.Directory, f), overwrite: true);
+                    }
+                    catch (IOException e)
+                    {
+                        log?.Invoke($"{f} не обновлён (файл занят): {e.Message}");
+                    }
+                }
                 // Проверка уже с рабочего места; заодно антивирус посмотрит новый exe сейчас, а не при подключении.
                 if (await GetVersionAsync(kind, CurrentPath(kind), ct).ConfigureAwait(false) != release.Version)
                 {
@@ -260,6 +273,22 @@ public sealed partial class CoreUpdater(CorePaths cores, HttpClient http, Action
         var actual = Convert.ToHexStringLower(sha.GetHashAndReset());
         if (actual != release.Sha256)
             throw new CoreUpdateException($"SHA256 архива {Title(release.Kind)} не совпадает с указанным на GitHub ({actual} ≠ {release.Sha256}) — архив повреждён или подменён");
+    }
+
+    /// <summary>Базы для правил geoip:/geosite: в маршрутах xray; лежат рядом с xray.exe.</summary>
+    public static readonly string[] GeoFiles = ["geoip.dat", "geosite.dat"];
+
+    private static bool TryExtract(string zipPath, string name, string target)
+    {
+        try
+        {
+            Extract(zipPath, name, target);
+            return true;
+        }
+        catch (CoreUpdateException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Достаёт из архива только нужный exe (по имени файла, в любой папке архива).</summary>
@@ -397,6 +426,18 @@ public static class CoreSelfTest
                         return $"{profile.Name}: {FirstLine(r.Output)}";
                 }
             }
+            // Сервер из подписки с полным конфигом: маршруты по geosite/geoip, свой DNS, автовыбор, finalmask.
+            var server = ServerConfigs.ParseRuntime(ServerConfigSample);
+            foreach (var options in new[]
+                     {
+                         new XrayOptions { Mode = XrayMode.TunBackend, SocksPort = 23456, SocksUser = "u", SocksPassword = "p4ssw0rd", MetricsPort = 23457, BindInterface = "Ethernet" },
+                         new XrayOptions { SocksPort = 23458, HttpPort = 23459, SplitTunnel = split, UseServerRouting = false },
+                     })
+            {
+                var r = await CoreValidator.ValidateXrayAsync(paths, XrayConfigBuilder.Build(server, options).ToJsonString(), ct).ConfigureAwait(false);
+                if (!r.Ok)
+                    return $"конфиг сервера из подписки: {FirstLine(r.Output)}";
+            }
             return null;
         }
 
@@ -420,6 +461,40 @@ public static class CoreSelfTest
         }
         return null;
     }
+
+    /// <summary>Конфиг сервера, как его отдают панели: маршруты, DNS, автовыбор, фрагментация в finalmask.</summary>
+    internal const string ServerConfigSample = $$"""
+        {
+          "remarks": "self-config",
+          "dns": { "queryStrategy": "UseIPv4", "servers": [
+            { "address": "77.88.8.8", "domains": ["full:a.example.com"], "skipFallback": true, "tag": "dns-bootstrap" },
+            { "address": "https://dns.google/dns-query", "tag": "dns-remote" } ] },
+          "outbounds": [
+            { "tag": "proxy", "protocol": "vless", "settings": { "vnext": [ { "address": "a.example.com", "port": 443,
+                "users": [ { "id": "{{Uuid}}", "encryption": "none", "flow": "xtls-rprx-vision" } ] } ] },
+              "streamSettings": { "network": "tcp", "security": "reality",
+                "realitySettings": { "serverName": "www.example.com", "fingerprint": "chrome", "publicKey": "{{Pbk}}", "shortId": "0123abcd" },
+                "finalmask": { "tcp": [ { "type": "fragment", "settings": { "packets": "tlshello", "length": "10-20", "delay": "5-15", "maxSplit": "3-6" } } ] },
+                "sockopt": { "domainStrategy": "UseIPv4" } } },
+            { "tag": "proxy-2", "protocol": "hysteria", "settings": { "version": 2, "address": "203.0.113.11", "port": 443 },
+              "streamSettings": { "network": "hysteria", "hysteriaSettings": { "version": 2, "auth": "self-test" }, "security": "tls",
+                "tlsSettings": { "serverName": "www.example.com", "alpn": ["h3"], "pinnedPeerCertSha256": "{{Pin}}" } } },
+            { "tag": "direct", "protocol": "freedom", "settings": { "domainStrategy": "UseIPv4" } },
+            { "tag": "block", "protocol": "blackhole" },
+            { "tag": "dns-out", "protocol": "dns" } ],
+          "burstObservatory": { "subjectSelector": ["proxy"], "pingConfig": { "destination": "http://www.gstatic.com/generate_204", "interval": "30s", "sampling": 2, "timeout": "3s" } },
+          "routing": { "domainStrategy": "AsIs",
+            "balancers": [ { "tag": "auto", "selector": ["proxy"], "strategy": { "type": "leastLoad" } } ],
+            "rules": [
+              { "type": "field", "inboundTag": ["dns-bootstrap"], "outboundTag": "direct" },
+              { "type": "field", "inboundTag": ["socks", "http"], "port": "53", "outboundTag": "dns-out" },
+              { "type": "field", "protocol": ["bittorrent"], "outboundTag": "block" },
+              { "type": "field", "ip": ["geoip:private"], "outboundTag": "direct" },
+              { "type": "field", "domain": ["geosite:category-ru", "regexp:\.ru$"], "outboundTag": "direct" },
+              { "type": "field", "ip": ["geoip:ru"], "outboundTag": "direct" },
+              { "type": "field", "network": "tcp,udp", "balancerTag": "auto" } ] }
+        }
+        """;
 
     private static string FirstLine(string output)
     {

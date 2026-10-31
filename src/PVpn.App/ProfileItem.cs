@@ -12,7 +12,12 @@ public sealed partial class ProfileItem(Profile profile, string? subscription = 
 
     /// <summary>Имя без флага-эмодзи: Windows рисует флаги буквами («NL»).</summary>
     public string Name => ProfileData.PlainName(Profile.Name) is { Length: > 0 } plain ? plain : Profile.Name;
-    public string Details => $"{Profile.ProtocolLabel} · {Profile.Host}:{Profile.Port}";
+    public string Details => Profile is XrayConfigProfile { Description: { } d }
+        ? $"{Profile.ProtocolLabel} · {d}"
+        : $"{Profile.ProtocolLabel} · {Profile.Host}:{Profile.Port}";
+
+    /// <summary>Имя как в подписке, с флагами (их рисует <see cref="FlagText"/> картинками).</summary>
+    public string DisplayName => Profile.Name.Trim();
 
     /// <summary>Группа в списке: имя подписки или «Свои» (добавленные вручную).</summary>
     public string Group => subscription ?? "Свои";

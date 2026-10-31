@@ -38,6 +38,12 @@ public sealed record SingBoxOptions
 
     /// <summary>Раздельное туннелирование (уже проверенное <see cref="SplitTunnelRules.Validate"/>); null — выключено.</summary>
     public SplitTunnelOptions? SplitTunnel { get; init; }
+
+    /// <summary>
+    /// Запросы DNS — в xray, а не свой DoH: у сервера из подписки свой DNS (российские домены — через Яндекс напрямую,
+    /// остальные — DoH через сервер), и разрешать их надо там же, где решается маршрут.
+    /// </summary>
+    public bool DnsViaProxy { get; init; }
 }
 
 /// <summary>
@@ -70,7 +76,9 @@ public static class SingBoxConfigBuilder
         var rules = new JsonArray
         {
             new JsonObject { ["action"] = "sniff" },
-            new JsonObject { ["protocol"] = "dns", ["action"] = "hijack-dns" },
+            o.DnsViaProxy
+                ? new JsonObject { ["protocol"] = "dns", ["action"] = "route", ["outbound"] = "proxy" }
+                : new JsonObject { ["protocol"] = "dns", ["action"] = "hijack-dns" },
             new JsonObject { ["ip_cidr"] = XrayConfigBuilder.ToJsonArray(serverCidrs), ["outbound"] = "direct" },
             new JsonObject { ["ip_is_private"] = true, ["outbound"] = "direct" },
         };

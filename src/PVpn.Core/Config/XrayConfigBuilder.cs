@@ -42,6 +42,12 @@ public sealed record XrayOptions
     /// не знает, какая программа к нему обращается, поэтому правила по программам здесь не применить.
     /// </summary>
     public SplitTunnelOptions? SplitTunnel { get; init; }
+
+    /// <summary>
+    /// Для серверов с полным конфигом из подписки (<see cref="XrayConfigProfile"/>): применять их маршруты
+    /// (российские сайты напрямую и т. п.). false — всё через сервер, кроме локальных сетей.
+    /// </summary>
+    public bool UseServerRouting { get; init; } = true;
 }
 
 public sealed class ConfigException(string message) : Exception(message);
@@ -59,6 +65,8 @@ public static class XrayConfigBuilder
 
     public static JsonObject Build(Profile profile, XrayOptions options)
     {
+        if (profile is XrayConfigProfile server)
+            return ServerConfigs.BuildRuntime(server, options);
         var inbounds = new JsonArray();
         var bypass = options.Bypass;
         var fragment = bypass.Fragment && profile is VlessProfile;
@@ -71,15 +79,7 @@ public static class XrayConfigBuilder
             ["inbounds"] = inbounds,
             ["outbounds"] = outbounds,
         };
-        if (options.MetricsPort > 0)
-        {
-            config["stats"] = new JsonObject();
-            config["policy"] = new JsonObject
-            {
-                ["system"] = new JsonObject { ["statsOutboundUplink"] = true, ["statsOutboundDownlink"] = true },
-            };
-            config["metrics"] = new JsonObject { ["tag"] = "metrics", ["listen"] = $"127.0.0.1:{options.MetricsPort}" };
-        }
+        AddMetrics(config, options.MetricsPort);
 
         if (options.Mode == XrayMode.TunBackend)
         {
@@ -147,6 +147,26 @@ public static class XrayConfigBuilder
         }
         config["routing"] = new JsonObject { ["domainStrategy"] = "AsIs", ["rules"] = rules };
         return config;
+    }
+
+    /// <summary>
+    /// Статистика трафика (metrics на 127.0.0.1, HTTP /debug/vars); 0 — без неё. Считаются и выходы (у обычного
+    /// сервера — «proxy»), и входы: у серверов из подписки с автовыбором своего «proxy» может не быть.
+    /// </summary>
+    internal static void AddMetrics(JsonObject config, int metricsPort)
+    {
+        if (metricsPort <= 0)
+            return;
+        config["stats"] = new JsonObject();
+        config["policy"] = new JsonObject
+        {
+            ["system"] = new JsonObject
+            {
+                ["statsOutboundUplink"] = true, ["statsOutboundDownlink"] = true,
+                ["statsInboundUplink"] = true, ["statsInboundDownlink"] = true,
+            },
+        };
+        config["metrics"] = new JsonObject { ["tag"] = "metrics", ["listen"] = $"127.0.0.1:{metricsPort}" };
     }
 
     /// <param name="viaFragment">Устанавливать соединение через исходящий «fragment» (см. BuildFragmentOutbound).</param>
