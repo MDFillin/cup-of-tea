@@ -56,6 +56,12 @@ public sealed record Subscription
     /// <summary>Настройки обхода от панели (fragmentation-*, noises-*); null — не прислала.</summary>
     public Config.PanelBypass? Bypass { get; init; }
 
+    /// <summary>Откуда обновлять профиль маршрутизации при каждом обновлении подписки (заголовок autorouting).</summary>
+    public string? RoutingUrl { get; init; }
+
+    /// <summary>Как часто панель советует обновлять базы geoip/geosite, часов (routing-geo-update-interval).</summary>
+    public int? GeoUpdateHours { get; init; }
+
     public bool IsDue(DateTimeOffset now) =>
         AutoUpdate && (LastAttempt ?? DateTimeOffset.MinValue) < now - (LastError == null ? TimeSpan.FromHours(UpdateIntervalHours) : TimeSpan.FromMinutes(30));
 }
@@ -89,6 +95,8 @@ public sealed record SubscriptionMeta
     public string? SortOrder { get; init; }
     public Routing.RoutingProfile? Routing { get; init; }
     public Config.PanelBypass? Bypass { get; init; }
+    public string? RoutingUrl { get; init; }
+    public int? GeoUpdateHours { get; init; }
 
     /// <summary>Панель переехала: новый полный адрес (new-url) или новый хост (new-domain). Только https.</summary>
     public string? NewUrl { get; init; }
@@ -205,7 +213,7 @@ public static partial class SubscriptionClient
         string? Value(string name) => header(name) ?? bodyMeta.GetValueOrDefault(name);
         var interval = int.TryParse(Value("profile-update-interval")?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var h) && h is >= 1 and <= 168 ? h : (int?)null;
         var title = DecodeTitle(Value("profile-title") ?? header("subscription-name"));
-        var meta = ParseMeta(Value, bodyMeta.GetValueOrDefault("routing"));
+        var meta = ParseMeta(Value, bodyMeta.GetValueOrDefault("routing"), bodyMeta.GetValueOrDefault("autorouting"));
 
         if (Config.ServerConfigs.LooksLikeConfigs(body))
         {
@@ -240,7 +248,7 @@ public static partial class SubscriptionClient
         return new SubscriptionFetch(result, unsupported, title, interval, info.Upload, info.Download, info.Total, info.Expire) { Meta = meta };
     }
 
-    private static SubscriptionMeta ParseMeta(Func<string, string?> value, string? bodyRouting)
+    private static SubscriptionMeta ParseMeta(Func<string, string?> value, string? bodyRouting, string? bodyAutorouting)
     {
         string? Text(string name, int max)
         {
@@ -264,6 +272,8 @@ public static partial class SubscriptionClient
             SortOrder = sort is "ping" or "name" or "none" ? sort : null,
             Routing = Routing.RoutingProfiles.TryParse(value("routing")) ?? Routing.RoutingProfiles.TryParse(bodyRouting),
             Bypass = Config.PanelBypass.FromHeaders(value),
+            RoutingUrl = (Routing.RoutingProfiles.AutoroutingUrl(value("autorouting")) ?? Routing.RoutingProfiles.AutoroutingUrl(bodyAutorouting))?.AbsoluteUri,
+            GeoUpdateHours = int.TryParse(value("routing-geo-update-interval")?.Trim(), out var geo) && geo is >= 1 and <= 8760 ? geo : null,
             NewUrl = Uri.TryCreate(newUrl, UriKind.Absolute, out var nu) && nu.Scheme == Uri.UriSchemeHttps ? nu.AbsoluteUri : null,
             NewDomain = newDomain is { Length: > 0 } && Uri.CheckHostName(newDomain) == UriHostNameType.Dns ? newDomain.ToLowerInvariant() : null,
         };
@@ -284,6 +294,8 @@ public static partial class SubscriptionClient
                 result.TryAdd(m.Groups[1].Value, m.Groups[2].Value.Trim());
             else if (line.Contains("://routing/onadd/", StringComparison.OrdinalIgnoreCase) || line.Contains("://routing/add/", StringComparison.OrdinalIgnoreCase))
                 result.TryAdd("routing", line.Trim());
+            else if (line.Contains("://autorouting/", StringComparison.OrdinalIgnoreCase))
+                result.TryAdd("autorouting", line.Trim());
         }
         return result;
     }
@@ -299,7 +311,7 @@ public static partial class SubscriptionClient
         return string.IsNullOrEmpty(s) ? null : s;
     }
 
-    [GeneratedRegex(@"^#\s*(announce|announce-url|profile-title|support-url|profile-web-page-url|profile-update-interval|hide-url)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^#\s*(announce|announce-url|profile-title|support-url|profile-web-page-url|profile-update-interval|hide-url|routing-geo-update-interval)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex MetaLineRegex();
 
     /// <summary>«upload=1; download=2; total=3; expire=1700000000» (expire=0 или нет — бессрочно).</summary>
@@ -398,6 +410,8 @@ public static class SubscriptionMerge
             SortOrder = fetch.Meta.SortOrder,
             Routing = fetch.Meta.Routing,
             Bypass = fetch.Meta.Bypass,
+            RoutingUrl = fetch.Meta.RoutingUrl,
+            GeoUpdateHours = fetch.Meta.GeoUpdateHours,
             // Панель переехала — дальше ходим по новому адресу (только https).
             Url = fetch.Meta.NewUrl ?? (fetch.Meta.NewDomain is { } domain ? new UriBuilder(subscription.Url) { Host = domain }.Uri.AbsoluteUri : subscription.Url),
         };
@@ -450,7 +464,7 @@ public static class SubscriptionService
             throw new SubscriptionException("Эта подписка уже добавлена");
         var fetch = await SubscriptionClient.FetchAsync(http, url, ct).ConfigureAwait(false);
         var sub = new Subscription { Name = string.IsNullOrWhiteSpace(name) ? SubscriptionMerge.DefaultName(data, url, fetch.Title) : name.Trim(), Url = url };
-        return data.Apply(sub, fetch, DateTimeOffset.Now);
+        return await WithAutoroutingAsync(data, http, data.Apply(sub, fetch, DateTimeOffset.Now), null, ct).ConfigureAwait(false);
     }
 
     /// <summary>Обновляет подписку; при ошибке запоминает её в подписке (серверы остаются прежними) и бросает исключение.</summary>
@@ -459,12 +473,37 @@ public static class SubscriptionService
         try
         {
             var fetch = await SubscriptionClient.FetchAsync(http, sub.Url, ct).ConfigureAwait(false);
-            return data.Apply(sub, fetch, DateTimeOffset.Now);
+            return await WithAutoroutingAsync(data, http, data.Apply(sub, fetch, DateTimeOffset.Now), sub.Routing, ct).ConfigureAwait(false);
         }
         catch (SubscriptionException e)
         {
             data.SetSubscription(sub with { LastAttempt = DateTimeOffset.Now, LastError = e.Message });
             throw;
         }
+    }
+
+    /// <summary>
+    /// Панель дала адрес профиля маршрутизации (autorouting) — скачиваем его заново при каждом обновлении подписки;
+    /// он главнее статичного профиля. Не скачался — остаётся прежний (<paramref name="previous"/>).
+    /// </summary>
+    private static async Task<SubscriptionUpdate> WithAutoroutingAsync(ProfileData data, HttpClient http, SubscriptionUpdate update,
+        Routing.RoutingProfile? previous, CancellationToken ct)
+    {
+        if (update.Subscription.RoutingUrl is not { } url)
+            return update;
+        Routing.RoutingProfile? profile = null;
+        try
+        {
+            profile = await Routing.RoutingProfiles.FetchAsync(http, new Uri(url), ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+        }
+        var routing = profile ?? update.Subscription.Routing ?? previous;
+        if (routing == update.Subscription.Routing)
+            return update;
+        var sub = update.Subscription with { Routing = routing };
+        data.SetSubscription(sub);
+        return update with { Subscription = sub };
     }
 }

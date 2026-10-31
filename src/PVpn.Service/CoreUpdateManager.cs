@@ -13,7 +13,7 @@ internal sealed class CoreUpdateManager(CorePaths cores, SessionManager sessions
     private CoreStatus status = new();
     private Dictionary<CoreKind, string> latest = [];
 
-    public async Task<IpcResponse> HandleAsync(string? action)
+    public async Task<IpcResponse> HandleAsync(string? action, string? geoSource = null)
     {
         switch (action ?? CoreActions.Status)
         {
@@ -22,6 +22,7 @@ internal sealed class CoreUpdateManager(CorePaths cores, SessionManager sessions
             case CoreActions.Check:
             case CoreActions.Update:
             case CoreActions.Rollback:
+            case CoreActions.GeoUpdate:
                 lock (sync)
                 {
                     if (status.Busy)
@@ -34,11 +35,12 @@ internal sealed class CoreUpdateManager(CorePaths cores, SessionManager sessions
                         {
                             CoreActions.Check => "Проверяю версии на GitHub…",
                             CoreActions.Update => "Скачиваю и проверяю новые версии…",
+                            CoreActions.GeoUpdate => "Скачиваю и проверяю базы geoip/geosite…",
                             _ => "Возвращаю прежние версии…",
                         },
                     };
                 }
-                _ = Task.Run(() => RunAsync(action!));
+                _ = Task.Run(() => action == CoreActions.GeoUpdate ? RunGeoAsync(geoSource) : RunAsync(action!));
                 return new IpcResponse { Ok = true, Cores = status };
             default:
                 return new IpcResponse { Ok = false, Error = $"Неизвестное действие с ядрами: {action}" };
@@ -104,6 +106,30 @@ internal sealed class CoreUpdateManager(CorePaths cores, SessionManager sessions
         }
     }
 
+    /// <summary>Базы geoip/geosite: только известные источники (ключ из GeoUpdater.Sources), адрес служба не принимает.</summary>
+    private async Task RunGeoAsync(string? source)
+    {
+        string? message = null, error = null;
+        try
+        {
+            using var http = CoreUpdater.CreateClient();
+            message = await new GeoUpdater(cores, http, log.Info).UpdateAsync(GeoUpdater.SourceOf(source), sessions.RunExclusiveAsync).ConfigureAwait(false);
+            if (sessions.Status.State != SessionState.Disconnected)
+                message += ". Подействуют при следующем подключении.";
+        }
+        catch (Exception e) when (e is CoreUpdateException or HttpRequestException or IOException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            log.Info($"Базы geoip/geosite: {e.Message}");
+            error = "Базы geoip/geosite: " + e.Message;
+        }
+        finally
+        {
+            var snapshot = await SnapshotAsync().ConfigureAwait(false);
+            lock (sync)
+                status = snapshot with { Busy = false, Message = message, Error = error };
+        }
+    }
+
     private async Task<CoreStatus> SnapshotAsync()
     {
         var list = new List<CoreInfo>();
@@ -116,6 +142,6 @@ internal sealed class CoreUpdateManager(CorePaths cores, SessionManager sessions
                 await CoreUpdater.GetVersionAsync(kind, Path.Combine(CoreUpdater.PreviousDirectoryOf(cores), exe)).ConfigureAwait(false)));
         }
         lock (sync)
-            return status with { Cores = list };
+            return status with { Cores = list, GeoUpdated = GeoUpdater.InstalledAt(cores), GeoSource = GeoUpdater.InstalledSource(cores) };
     }
 }

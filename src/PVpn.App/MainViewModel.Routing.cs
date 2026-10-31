@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -64,6 +65,7 @@ public sealed partial class MainViewModel
         AutoPing = settings.AutoPing;
         SendHwid = settings.SendHwid;
         UseSubscriptionBypass = settings.UseSubscriptionBypass;
+        LoadGeoSettings();
         ApplySort();
     }
 
@@ -168,6 +170,11 @@ public sealed partial class MainViewModel
         {
             text = "";
         }
+        if (text.Contains("://autorouting/", StringComparison.OrdinalIgnoreCase) && RoutingProfiles.AutoroutingUrl(text) is { } url)
+        {
+            _ = ImportRoutingFromUrlAsync(url);
+            return;
+        }
         if (RoutingProfiles.TryParse(text) is not { } profile)
         {
             Notice = "В буфере обмена нет профиля маршрутизации (JSON с DirectSites/ProxySites/BlockSites, base64 или ссылка …://routing/onadd/…).";
@@ -176,15 +183,124 @@ public sealed partial class MainViewModel
         ApplyImportedRouting(profile);
     }
 
-    private void ApplyImportedRouting(RoutingProfile profile)
+    /// <summary>Свой профиль по ссылке: скачать, включить и дальше обновлять раз в сутки.</summary>
+    private async Task ImportRoutingFromUrlAsync(Uri url)
     {
+        RoutingProfile? profile;
+        try
+        {
+            using var http = SubscriptionClient.CreateClient(sendHwid: false);
+            profile = await RoutingProfiles.FetchAsync(http, url);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            Notice = $"Не удалось скачать профиль маршрутизации: {e.Message}";
+            return;
+        }
+        if (profile == null)
+        {
+            Notice = $"По адресу {url.Host} нет профиля маршрутизации.";
+            return;
+        }
+        settings.CustomRoutingUrl = url.AbsoluteUri;
+        settings.CustomRoutingFetched = DateTimeOffset.Now;
+        ApplyImportedRouting(profile, keepUrl: true);
+    }
+
+    /// <summary>Раз в сутки — свежая версия своего профиля по ссылке (молча; не скачался — остаётся прежний).</summary>
+    private async Task RefreshCustomRoutingAsync()
+    {
+        if (settings.CustomRoutingUrl is not { } url || settings.CustomRoutingFetched > DateTimeOffset.Now.AddHours(-24))
+            return;
+        settings.CustomRoutingFetched = DateTimeOffset.Now;
+        try
+        {
+            using var http = SubscriptionClient.CreateClient(sendHwid: false);
+            if (await RoutingProfiles.FetchAsync(http, new Uri(url)) is { } profile)
+            {
+                settings.CustomRouting = profile;
+                AppendLog("app", $"Профиль маршрутизации «{profile.Name}» обновлён по ссылке");
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+        }
+        SaveSettings();
+        RefreshRoutingChoices();
+    }
+
+    private void ApplyImportedRouting(RoutingProfile profile, bool keepUrl = false)
+    {
+        if (!keepUrl)
+            settings.CustomRoutingUrl = null;
         settings.CustomRouting = profile;
         settings.RoutingChoice = RoutingCustom;
         settings.RoutingChosenByUser = true;
         SaveSettings();
         RefreshRoutingChoices();
         RoutingChoice = RoutingCustom;
-        Notice = $"Профиль маршрутизации «{profile.Name}» добавлен и выбран ({profile.RuleCount} правил).";
+        Notice = $"Профиль маршрутизации «{profile.Name}» добавлен и выбран ({profile.RuleCount} правил)"
+                 + (settings.CustomRoutingUrl != null ? ", будет обновляться раз в сутки." : ".");
+    }
+
+    // ───────────── Базы geoip/geosite ─────────────
+
+    public IReadOnlyList<RoutingChoice> GeoSources { get; } =
+        PVpn.Core.Cores.GeoUpdater.Sources.Select(s => new RoutingChoice(s.Key, s.Title)).ToList();
+
+    [ObservableProperty] private string geoSource = "v2fly";
+    [ObservableProperty] private bool geoAutoUpdate;
+    [ObservableProperty] private string geoUpdateDaysText = "7";
+
+    private void LoadGeoSettings()
+    {
+        GeoSource = GeoSources.Any(s => s.Key == settings.GeoSource) ? settings.GeoSource : "v2fly";
+        GeoAutoUpdate = settings.GeoAutoUpdate;
+        GeoUpdateDaysText = settings.GeoUpdateDays.ToString();
+    }
+
+    partial void OnGeoSourceChanged(string value)
+    {
+        if (loadingSettings || value == null)
+            return;
+        settings.GeoSource = value;
+        SaveSettings();
+    }
+
+    partial void OnGeoAutoUpdateChanged(bool value)
+    {
+        if (loadingSettings)
+            return;
+        settings.GeoAutoUpdate = value;
+        SaveSettings();
+    }
+
+    partial void OnGeoUpdateDaysTextChanged(string value)
+    {
+        if (loadingSettings || !int.TryParse(value, out var days) || days is < 1 or > 365)
+            return;
+        settings.GeoUpdateDays = days;
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// Пора ли обновить базы: интервал свой (дней) или — если панель подписки советует (routing-geo-update-interval) —
+    /// самый частый из советов. После неудачи — не чаще раза в 6 часов. Обновляет служба; без неё — никак.
+    /// </summary>
+    private async Task MaybeUpdateGeoAsync()
+    {
+        if (!GeoAutoUpdate || Product.IsPortable || settings.GeoLastAttempt > DateTimeOffset.Now.AddHours(-6))
+            return;
+        await Cores.LoadAsync();
+        if (Cores.Last is not { Busy: false } status)
+            return;
+        var hours = data.Subscriptions.Select(s => s.GeoUpdateHours).OfType<int>().DefaultIfEmpty(settings.GeoUpdateDays * 24).Min();
+        if (status.GeoUpdated is { } at && at > DateTimeOffset.Now.AddHours(-hours) && (status.GeoSource ?? "v2fly") == GeoSource)
+            return;
+        settings.GeoLastAttempt = DateTimeOffset.Now;
+        SaveSettings();
+        AppendLog("app", "Обновляю базы geoip/geosite");
+        await Cores.UpdateGeoQuietAsync();
     }
 
     // ───────────── Объявления панели ─────────────

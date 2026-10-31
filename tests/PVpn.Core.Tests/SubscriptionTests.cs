@@ -233,4 +233,38 @@ public class SubscriptionTests
         using var quiet = SubscriptionClient.CreateClient(sendHwid: false);
         Assert.False(quiet.DefaultRequestHeaders.Contains("x-hwid"));
     }
+
+    private sealed class RouteHandler(string? profileJson) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            if (request.RequestUri!.AbsolutePath == "/routing.json")
+                return Task.FromResult(profileJson == null
+                    ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(profileJson) });
+            var r = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(LinkParserTests.Hy2Link) };
+            r.Headers.TryAddWithoutValidation("autorouting", "anyapp://autorouting/onadd/https://panel.example/routing.json");
+            r.Headers.TryAddWithoutValidation("routing-geo-update-interval", "48");
+            return Task.FromResult(r);
+        }
+    }
+
+    [Fact]
+    public async Task AutoroutingProfileIsFetchedAndKeptWhenUnavailable()
+    {
+        Assert.Equal("https://panel.example/r.json", PVpn.Core.Routing.RoutingProfiles.AutoroutingUrl("x://autorouting/onadd/https://panel.example/r.json")!.AbsoluteUri);
+        Assert.Null(PVpn.Core.Routing.RoutingProfiles.AutoroutingUrl("x://autorouting/onadd/http://panel.example/r.json"));
+
+        var data = new ProfileData();
+        using var http = new HttpClient(new RouteHandler("""{"Name":"Авто","BlockSites":["geosite:category-ads-all"]}"""));
+        var added = await SubscriptionService.AddAsync(data, http, "https://panel.example/sub/abc", null);
+        Assert.Equal("https://panel.example/routing.json", added.Subscription.RoutingUrl);
+        Assert.Equal("Авто", added.Subscription.Routing!.Name);
+        Assert.Equal(48, added.Subscription.GeoUpdateHours);
+
+        // Адрес профиля не ответил — профиль остаётся прежним.
+        using var broken = new HttpClient(new RouteHandler(null));
+        var updated = await SubscriptionService.UpdateAsync(data, broken, data.Subscriptions[0]);
+        Assert.Equal("Авто", updated.Subscription.Routing!.Name);
+    }
 }

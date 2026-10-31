@@ -14,7 +14,7 @@ public sealed partial class MainViewModel
 {
     public const string LinkScheme = "cupoftea";
 
-    [GeneratedRegex(@"^[a-z][a-z0-9+.-]*://(?<action>add|onadd|import|sub|routing/onadd|routing/add)/(?<payload>.+)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^[a-z][a-z0-9+.-]*://(?<action>add|onadd|import|sub|routing/onadd|routing/add|autorouting/onadd|autorouting/add)/(?<payload>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex AppLinkRegex();
 
     /// <summary>Похоже ли на ссылку действия (а не на ссылку сервера vless:// / hy2://).</summary>
@@ -58,6 +58,18 @@ public sealed partial class MainViewModel
         var action = m.Groups["action"].Value.ToLowerInvariant();
         var payload = Uri.UnescapeDataString(m.Groups["payload"].Value);
 
+        if (action.StartsWith("autorouting", StringComparison.Ordinal))
+        {
+            if (RoutingProfiles.AutoroutingUrl(payload) is not { } url)
+            {
+                Notice = "В ссылке нет адреса профиля маршрутизации (нужен https://…).";
+                return;
+            }
+            if (fromOutside && !Confirm($"Добавить профиль маршрутизации с {url.Host} (будет обновляться сам) и включить его?"))
+                return;
+            await ImportRoutingFromUrlAsync(url);
+            return;
+        }
         if (action.StartsWith("routing", StringComparison.Ordinal))
         {
             if (RoutingProfiles.TryParse(payload) is not { } profile)

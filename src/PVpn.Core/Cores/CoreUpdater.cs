@@ -137,7 +137,7 @@ public sealed partial class CoreUpdater(CorePaths cores, HttpClient http, Action
         throw new CoreUpdateException($"В релизе {Title(kind)} {version} нет архива {expected}");
     }
 
-    private static void CheckHost(Uri url)
+    internal static void CheckHost(Uri url)
     {
         if (url.Scheme != Uri.UriSchemeHttps || !AllowedHosts.Contains(url.Host, StringComparer.OrdinalIgnoreCase))
             throw new CoreUpdateException($"Ссылка на архив ведёт не на GitHub: {url.Host}");
@@ -434,6 +434,18 @@ public static class CoreSelfTest
                     if (!r.Ok)
                         return $"{profile.Name}: {FirstLine(r.Output)}";
                 }
+            }
+            // Профили маршрутизации (geosite:category-ru, category-ads-all, geoip:ru) — в TUN и в режиме прокси.
+            var linkProfile = LinkParser.Parse(Links[0]);
+            foreach (var options in new[]
+                     {
+                         new XrayOptions { Mode = XrayMode.TunBackend, SocksPort = 23456, SocksUser = "u", SocksPassword = "p4ssw0rd", Routing = RoutingProfiles.RussiaDirectNoAds },
+                         new XrayOptions { SocksPort = 23458, HttpPort = 23459, Routing = RoutingProfiles.RussiaDirectNoAds },
+                     })
+            {
+                var r = await CoreValidator.ValidateXrayAsync(paths, XrayConfigBuilder.Build(linkProfile, options).ToJsonString(), ct).ConfigureAwait(false);
+                if (!r.Ok)
+                    return $"профиль маршрутизации: {FirstLine(r.Output)}";
             }
             // Сервер из подписки с полным конфигом: маршруты по geosite/geoip, свой DNS, автовыбор, finalmask.
             var server = ServerConfigs.ParseRuntime(ServerConfigSample);

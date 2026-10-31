@@ -228,6 +228,33 @@ public static partial class RoutingProfiles
             rules.Insert(at++, rule);
     }
 
+    /// <summary>
+    /// Автообновляемый профиль: «схема://autorouting/onadd/https://…» (или просто https://…) → адрес, откуда его брать.
+    /// null — это не такая ссылка. Только https.
+    /// </summary>
+    public static Uri? AutoroutingUrl(string? text)
+    {
+        var s = text?.Trim();
+        if (string.IsNullOrEmpty(s))
+            return null;
+        var m = AutoroutingLinkRegex().Match(s);
+        if (m.Success)
+            s = Uri.UnescapeDataString(m.Groups[1].Value);
+        return Uri.TryCreate(s, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps ? u : null;
+    }
+
+    /// <summary>Скачивает профиль по адресу автообновления (до 2 МБ, только https); null — там не профиль.</summary>
+    public static async Task<RoutingProfile?> FetchAsync(HttpClient http, Uri url, CancellationToken ct = default)
+    {
+        if (url.Scheme != Uri.UriSchemeHttps)
+            return null;
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 2 * 1024 * 1024)
+            return null;
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        return body.Length > 2 * 1024 * 1024 ? null : TryParse(body);
+    }
+
     /// <summary>Профиль как JSON — для экспорта и хранения у подписки.</summary>
     public static string ToJson(RoutingProfile p) => JsonSerializer.Serialize(p, RoutingJsonContext.Default.RoutingProfile);
 
@@ -236,6 +263,9 @@ public static partial class RoutingProfiles
 
     [GeneratedRegex(@"^[a-z][a-z0-9+.-]*://routing/(?:onadd|add)/(.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex RoutingLinkRegex();
+
+    [GeneratedRegex(@"^[a-z][a-z0-9+.-]*://autorouting/(?:onadd|add)/(.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex AutoroutingLinkRegex();
 }
 
 [JsonSerializable(typeof(RoutingProfile))]

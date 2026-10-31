@@ -146,7 +146,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             settings.Bypass = value;
             SaveSettings();
         });
-        Cores = new CoresViewModel(service);
+        Cores = new CoresViewModel(service, () => GeoSource);
         Dns = new DnsViewModel(() => settings.Dns, value =>
         {
             settings.Dns = value;
@@ -739,6 +739,11 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             // Повтор автоподключения (служба ещё не запустилась после загрузки, сервер не отвечал).
             if (tick % 60 == 30)
                 _ = EvaluateNetworkAsync();
+            // Свой профиль маршрутизации по ссылке и базы geoip/geosite — проверка, не пора ли обновить.
+            if (tick % 60 == 45)
+                _ = RefreshCustomRoutingAsync();
+            if (tick % 300 == 50)
+                _ = MaybeUpdateGeoAsync();
             if (proxy != null || proxyStarting)
                 await PollProxyAsync();
             else

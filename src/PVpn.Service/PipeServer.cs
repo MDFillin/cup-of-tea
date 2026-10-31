@@ -120,7 +120,7 @@ internal sealed class PipeServer(SessionManager manager, CoreUpdateManager coreU
             case IpcCommands.Logs:
                 return new IpcResponse { Ok = true, Logs = log.After(request.LogsAfter) };
             case IpcCommands.Cores:
-                return await coreUpdates.HandleAsync(request.CoreAction).ConfigureAwait(false);
+                return await coreUpdates.HandleAsync(request.CoreAction, request.GeoSource).ConfigureAwait(false);
             default:
                 return new IpcResponse { Ok = false, Error = $"Неизвестная команда: {request.Command}" };
         }

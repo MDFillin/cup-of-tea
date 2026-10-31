@@ -1139,6 +1139,22 @@
                                                Visibility="{Binding Message, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
                                     <TextBlock Text="{Binding Error}" TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{x:Static local:StatusBrushes.Error}"
                                                Visibility="{Binding Error, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                                    <!-- Базы geoip/geosite -->
+                                    <TextBlock Text="{Binding GeoText}" FontSize="15" Margin="0,22,0,6" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Источник" VerticalAlignment="Center" Width="90" />
+                                        <ComboBox MinWidth="240" AutomationProperties.Name="Источник баз geoip/geosite"
+                                                  ItemsSource="{Binding DataContext.GeoSources, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Title" SelectedValuePath="Key"
+                                                  SelectedValue="{Binding DataContext.GeoSource, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                        <ui:Button Content="Обновить базы" Icon="{ui:SymbolIcon ArrowDownload24}" Margin="8,0,0,0" Command="{Binding UpdateGeoCommand}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <ui:ToggleSwitch Content="Обновлять сами раз в" IsChecked="{Binding DataContext.GeoAutoUpdate, RelativeSource={RelativeSource AncestorType=Window}}" VerticalAlignment="Center" />
+                                        <TextBox Text="{Binding DataContext.GeoUpdateDaysText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="10,0,6,0" />
+                                        <TextBlock Text="дней" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                                               Text="По базам работают правила geosite:/geoip: в маршрутах (например, «Россия напрямую»). «Россия (runetfreedom)» — те же базы плюс списки заблокированного в РФ (geosite:ru-blocked и др.), около 90 МБ. Скачиваются только с GitHub, SHA256 сверяется с опубликованным; перед заменой xray проверяет маршруты на новых базах. Если подписка советует, как часто обновлять, — берётся её совет." />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,12,0,0"
                                                Text="Новые версии берутся только с официальных релизов на GitHub (XTLS/Xray-core, SagerNet/sing-box). Перед заменой служба сверяет SHA256 архива с GitHub, проверяет, что ядро запускается и принимает наши конфиги. Прежняя версия сохраняется — «Откатить» вернёт её. Работающее подключение не рвётся: новое ядро подействует со следующего." />
                                 </StackPanel>

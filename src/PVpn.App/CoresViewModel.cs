@@ -18,7 +18,7 @@ public sealed partial class CoresViewModel : ObservableObject
     public ObservableCollection<string> Lines { get; } = [];
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(CheckCommand), nameof(UpdateCommand), nameof(RollbackCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CheckCommand), nameof(UpdateCommand), nameof(RollbackCommand), nameof(UpdateGeoCommand))]
     private bool busy;
 
     [ObservableProperty]
@@ -32,14 +32,26 @@ public sealed partial class CoresViewModel : ObservableObject
     [ObservableProperty] private string? message;
     [ObservableProperty] private string? error;
 
-    public CoresViewModel(ServiceClient service)
+    /// <summary>«Базы geoip/geosite: 31.10.2026, Россия (runetfreedom)».</summary>
+    [ObservableProperty] private string? geoText;
+
+    /// <summary>Последнее состояние от службы (для автообновления баз).</summary>
+    public CoreStatus? Last { get; private set; }
+
+    private readonly Func<string> geoSource;
+
+    public CoresViewModel(ServiceClient service, Func<string> geoSource)
     {
         this.service = service;
+        this.geoSource = geoSource;
         poll.Tick += async (_, _) => await RefreshAsync();
     }
 
     /// <summary>Показать, что стоит сейчас (при открытии настроек).</summary>
     public Task LoadAsync() => SendAsync(CoreActions.Status);
+
+    /// <summary>Автообновление баз (без вопросов и сообщений об ошибке связи со службой).</summary>
+    public Task UpdateGeoQuietAsync() => SendAsync(CoreActions.GeoUpdate);
 
     private bool CanCheck() => !Busy;
     private bool CanUpdate() => !Busy && UpdateAvailable;
@@ -54,11 +66,17 @@ public sealed partial class CoresViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRollback))]
     private Task RollbackAsync() => SendAsync(CoreActions.Rollback);
 
+    [RelayCommand(CanExecute = nameof(CanCheck))]
+    private Task UpdateGeoAsync() => SendAsync(CoreActions.GeoUpdate);
+
     private async Task SendAsync(string action)
     {
         try
         {
-            var r = await service.SendAsync(new IpcRequest { Command = IpcCommands.Cores, CoreAction = action }, TimeSpan.FromSeconds(30));
+            var r = await service.SendAsync(new IpcRequest
+            {
+                Command = IpcCommands.Cores, CoreAction = action, GeoSource = action == CoreActions.GeoUpdate ? geoSource() : null,
+            }, TimeSpan.FromSeconds(30));
             if (r.Cores != null)
                 Apply(r.Cores);
             if (!r.Ok)
@@ -78,6 +96,9 @@ public sealed partial class CoresViewModel : ObservableObject
 
     private void Apply(CoreStatus s)
     {
+        Last = s;
+        GeoText = "Базы geoip/geosite: " + (s.GeoUpdated is { } at ? at.LocalDateTime.ToString("dd.MM.yyyy") : "нет")
+                  + (s.GeoSource != null ? $", {PVpn.Core.Cores.GeoUpdater.SourceOf(s.GeoSource).Title}" : ", из комплекта xray");
         Busy = s.Busy;
         Message = s.Message;
         Error = s.Error;

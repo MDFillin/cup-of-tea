@@ -87,6 +87,16 @@ public sealed class AppSettings
 
     /// <summary>Настройки обхода от панели подписки (fragmentation-*, noises-*) — для её серверов поверх своих.</summary>
     public bool UseSubscriptionBypass { get; set; } = true;
+
+    /// <summary>Свой профиль маршрутизации по ссылке: откуда обновлять и когда обновляли.</summary>
+    public string? CustomRoutingUrl { get; set; }
+    public DateTimeOffset? CustomRoutingFetched { get; set; }
+
+    /// <summary>Базы geoip/geosite: источник (v2fly, runetfreedom), автообновление и как часто, дней.</summary>
+    public string GeoSource { get; set; } = "v2fly";
+    public bool GeoAutoUpdate { get; set; } = true;
+    public int GeoUpdateDays { get; set; } = 7;
+    public DateTimeOffset? GeoLastAttempt { get; set; }
     public SplitTunnelSettings SplitTunnel { get; set; } = new();
 
     public static AppSettings Load()

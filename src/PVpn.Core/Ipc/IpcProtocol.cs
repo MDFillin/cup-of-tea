@@ -47,6 +47,9 @@ public static class CoreActions
 
     /// <summary>Вернуть прежние версии.</summary>
     public const string Rollback = "rollback";
+
+    /// <summary>Скачать и поставить свежие базы geoip/geosite (источник — <see cref="IpcRequest.GeoSource"/>).</summary>
+    public const string GeoUpdate = "geo-update";
 }
 
 /// <summary>Одно ядро: версия сейчас, последняя на GitHub (null — не проверяли) и сохранённая для отката.</summary>
@@ -63,6 +66,10 @@ public sealed record CoreStatus
     public string? Error { get; init; }
     public IReadOnlyList<CoreInfo> Cores { get; init; } = [];
     public DateTimeOffset? CheckedAt { get; init; }
+
+    /// <summary>Когда базы geoip/geosite последний раз заменялись и откуда (null — из комплекта xray).</summary>
+    public DateTimeOffset? GeoUpdated { get; init; }
+    public string? GeoSource { get; init; }
 }
 
 /// <remarks>
@@ -121,6 +128,9 @@ public sealed record IpcRequest
 
     /// <summary>Для cores: см. <see cref="CoreActions"/>.</summary>
     public string? CoreAction { get; init; }
+
+    /// <summary>Для geo-update: источник баз (ключ из GeoUpdater.Sources).</summary>
+    public string? GeoSource { get; init; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<SessionState>))]
