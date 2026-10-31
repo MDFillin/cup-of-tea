@@ -55,7 +55,7 @@ catch (Exception e) when (e is LinkParseException or ConfigException or InvalidO
 static void PrintHelp() => Console.WriteLine("""
     cupoftea-cli — консольный помощник The Cup of Tea (разработка и диагностика)
 
-      import <файл> [--filter <префикс>]   импорт ссылок vless:// и hy2:// из файла («-» — из stdin)
+      import <файл> [--filter <префикс>]   импорт ссылок (vless, hy2, trojan, vmess, ss) или JSON с конфигами xray («-» — stdin)
       list                                 список серверов
       remove <имя>                         удалить сервер
       config <имя> [--tun]                 показать конфиги ядер (секреты скрыты)
@@ -66,7 +66,8 @@ static void PrintHelp() => Console.WriteLine("""
       ping [<имя>] [--count N]             TCP-пинг серверов через физический адаптер
       netinfo                              адаптеры, маршруты по умолчанию, конфликты с другими VPN
       restore-proxy                        вернуть системный прокси, как было до подключения
-      export [--filter <префикс>]          вывести ссылки серверов (для переноса на другой ПК)
+      export [--filter <префикс>] [--configs]  вывести ссылки серверов (для переноса на другой ПК);
+                                           --configs — серверы с полным конфигом подписки, JSON-массивом
       killswitch [off]                     число фильтров kill switch / снять их (от администратора)
       sub add <url> [--name N]             добавить подписку и загрузить её серверы
       sub list                             подписки: трафик, срок, последнее обновление
@@ -131,7 +132,15 @@ static int Import(string[] args)
     var source = Positional(args, 0) ?? throw new InvalidOperationException("Укажите файл со ссылками");
     var text = source == "-" ? Console.In.ReadToEnd() : File.ReadAllText(source);
     var filter = Option(args, "--filter");
-    var result = LinkParser.ParseMany(text);
+    // JSON с конфигами xray (как отдаёт панель или export --configs) — те же серверы с полным конфигом.
+    ImportResult result;
+    if (ServerConfigs.LooksLikeConfigs(text))
+    {
+        var configs = ServerConfigs.ParseMany(text);
+        result = new ImportResult(configs.Profiles, configs.Errors);
+    }
+    else
+        result = LinkParser.ParseMany(text);
 
     var store = new ProfileStore();
     var data = store.Load();
@@ -439,6 +448,19 @@ static int KillSwitchCommand(string[] args)
 static int Export(string[] args)
 {
     var filter = Option(args, "--filter");
+    bool Matches(Profile p) => filter == null || ProfileData.PlainName(p.Name).StartsWith(filter, StringComparison.OrdinalIgnoreCase);
+    if (Flag(args, "--configs"))
+    {
+        var array = new JsonArray();
+        foreach (var server in new ProfileStore().Load().Profiles.OfType<XrayConfigProfile>().Where(Matches))
+        {
+            var config = JsonNode.Parse(server.Config)!.AsObject();
+            config["remarks"] = server.Name;
+            array.Add(config);
+        }
+        Console.WriteLine(array.ToJsonString());
+        return 0;
+    }
     foreach (var p in new ProfileStore().Load().Profiles)
     {
         // У серверов с полным конфигом из подписки ссылки нет.
