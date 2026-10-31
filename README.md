@@ -1,8 +1,8 @@
-# The Cup of Tea — личный VPN-клиент для Windows
+# The Cup of Tea — VPN-клиент для Windows
 
 Рабочее имя кода — PVpn (проекты и пространства имён). Всё, что видит Windows и пользователь, называется The Cup of Tea:
 `CupOfTea.exe`, служба и адаптер TUN `CupOfTea`, `cupoftea-cli.exe`, папки `%APPDATA%\CupOfTea`, `C:\ProgramData\CupOfTea`
-(имена — `src/PVpn.Core/Product.cs`). Значок — молния (`scripts/make-icons.ps1`).
+(имена — `src/PVpn.Core/Product.cs`). Значок — чашка чая (`scripts/make-icons.ps1`).
 
 Архитектура и план MVP: [`D:\vpn\plan\client-windows.md`](../plan/client-windows.md).
 
@@ -79,6 +79,22 @@ CupOfTea.exe --tray                                        # запуск в т�
 CupOfTea.exe --snapshot ui.png --tab 3 [--sub dns] [--width 1600 --height 1000]  # разработка: окно в PNG и выйти
 scripts\make-icons.ps1                                 # перерисовать значки (src\PVpn.App\Assets)
 ```
+
+## Из INCY (0.4.0)
+- **Профили маршрутизации** («Маршруты → Профиль маршрутизации»): напрямую / через VPN / блокировать по сайтам и IP,
+  `geosite:`/`geoip:`, `GlobalProxy`, `DomainStrategy`. Готовые: «Россия напрямую», «… без рекламы», «Без рекламы».
+  Формат JSON как у панелей (`DirectSites`, `ProxyIp`, `BlockSites`…): из буфера (JSON, base64, `…://routing/onadd/…`),
+  ссылкой `cupoftea://routing/onadd/…` или от подписки (заголовок `routing`, строка в теле). Действует на серверы по ссылкам
+  в TUN и в режиме прокси (правила в xray, домен — из SNI); у серверов с полным конфигом подписки — их маршруты.
+- **Заголовки подписки:** `announce`/`announce-url` (объявление на главной), `profile-description`, `support-url`,
+  `support-email`, `profile-web-page-url` (кнопки у подписки), `hide-url`, `sort-order`, `routing`, `new-url`/`new-domain`
+  (переезд панели, только https), строки `#announce:` и т. п. в теле, `expire` в миллисекундах.
+  Запрос с HWID (`x-hwid` — хэш MachineGuid, `x-device-os`, `x-ver-os`, `x-device-model`) для лимита устройств; выключается.
+- **Серверы:** сортировка «как в подписке / по пингу / по имени», пинг при запуске и после обновления подписки.
+- **Ссылки `cupoftea://`** (регистрируются для пользователя при запуске): `add|onadd|import/<адрес подписки или base64>`,
+  `routing/onadd/<профиль>`; перед добавлением — вопрос. «Вставить ссылки» понимает те же пути с любой схемой.
+- **Портативная версия** `scriptsuild-portable.ps1` → `out\CupOfTea-Portable-<версия>.zip`: без установки и прав
+  администратора, только режим прокси, данные в папке `data` рядом с программой (`portable.txt` включает режим).
 
 ## Установка
 `CupOfTea-Setup-<версия>.exe` — один запрос UAC. Файлы копирует Inno Setup, остальное делает `install.ps1`

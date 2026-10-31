@@ -20,7 +20,15 @@ public static class Product
     public static readonly string[] LegacyIds = ["TempestVPN", "PVpn"];
 
     /// <summary>Папка данных пользователя или машины: %APPDATA%\CupOfTea, %LOCALAPPDATA%\CupOfTea, C:\ProgramData\CupOfTea.</summary>
-    public static string DataDir(Environment.SpecialFolder root) => Path.Combine(Environment.GetFolderPath(root), Id);
+    public static string DataDir(Environment.SpecialFolder root) => IsPortable
+        ? Path.Combine(AppContext.BaseDirectory, "data", root == Environment.SpecialFolder.LocalApplicationData ? "local" : "roaming")
+        : Path.Combine(Environment.GetFolderPath(root), Id);
+
+    /// <summary>
+    /// Портативная версия (рядом с exe лежит portable.txt): данные пользователя — в папке data рядом с программой,
+    /// без установки и прав администратора (только режим прокси). Серверы зашифрованы для этого пользователя Windows.
+    /// </summary>
+    public static bool IsPortable { get; } = File.Exists(Path.Combine(AppContext.BaseDirectory, "portable.txt"));
 }
 
 /// <summary>Перенос данных пользователя из папок прежних имён (TempestVPN, PVpn) в папки The Cup of Tea.</summary>
@@ -33,6 +41,9 @@ public static class LegacyData
     public static IReadOnlyList<string> MigrateUserData()
     {
         var moved = new List<string>();
+        // Портативная версия живёт в своей папке и чужие данные из профиля Windows не забирает.
+        if (Product.IsPortable)
+            return moved;
         foreach (var root in new[] { Environment.SpecialFolder.ApplicationData, Environment.SpecialFolder.LocalApplicationData })
         {
             var current = Product.DataDir(root);

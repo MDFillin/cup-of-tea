@@ -220,7 +220,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public async Task InitializeAsync()
     {
         loadingSettings = true;
-        IsTunMode = settings.TunMode;
+        // Портативная версия работает без службы — только режим прокси.
+        IsTunMode = settings.TunMode && !Product.IsPortable;
         KillSwitch = settings.KillSwitch;
         BlockQuic = settings.BlockQuic;
         UseServerRouting = settings.UseServerRouting;
@@ -332,6 +333,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         if (string.IsNullOrWhiteSpace(text))
         {
             Notice = "В буфере обмена нет ссылок или QR-кода. Скопируйте ссылки vless:// или hy2:// (или картинку с QR) и нажмите ещё раз.";
+            return;
+        }
+        // Ссылка действия от панели или бота (…://onadd/…, …://routing/onadd/…).
+        if (IsAppLink(text))
+        {
+            _ = HandleLinkAsync(text.Trim(), fromOutside: false);
             return;
         }
         // Одна ссылка https:// — это ссылка подписки.

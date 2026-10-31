@@ -294,7 +294,7 @@ public static partial class LinkParser
         return hex.Length == 64 && hex.All(Uri.IsHexDigit);
     }
 
-    internal static bool TryDecodeBase64(string text, out string decoded)
+    public static bool TryDecodeBase64(string text, out string decoded)
     {
         decoded = "";
         if (text.Length == 0 || text.Contains("://"))

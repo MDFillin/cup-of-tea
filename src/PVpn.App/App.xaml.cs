@@ -30,8 +30,10 @@ public partial class App : Application
         base.OnStartup(e);
         DispatcherUnhandledException += OnUnhandledException;
         var snapshot = ArgValue(e.Args, "--snapshot");
+        // Ссылка cupoftea://… (с сайта, из бота): Windows запускает программу с ней в аргументе.
+        var link = e.Args.FirstOrDefault(MainViewModel.IsAppLink);
 
-        if (snapshot == null && !BecomeSingleInstance())
+        if (snapshot == null && !BecomeSingleInstance(link))
         {
             Shutdown();
             return;
@@ -75,6 +77,9 @@ public partial class App : Application
         vm.HotkeyChanged += ApplyHotkey;
         if (!e.Args.Contains("--tray"))
             ShowMainWindow();
+        MainViewModel.RegisterLinkScheme();
+        if (link != null)
+            await vm.HandleLinkAsync(link, fromOutside: true);
     }
 
     private void ApplyHotkey()
@@ -92,12 +97,26 @@ public partial class App : Application
         }
     }
 
-    /// <summary>Второй запуск не открывает второе окно, а показывает окно первого.</summary>
-    private bool BecomeSingleInstance()
+    /// <summary>Ссылка от второго запуска для первого (файл рядом с данными; живёт секунды).</summary>
+    private static string PendingLinkPath => Path.Combine(Product.DataDir(Environment.SpecialFolder.LocalApplicationData), "pending-link.txt");
+
+    /// <summary>Второй запуск не открывает второе окно, а показывает окно первого (и передаёт ему ссылку).</summary>
+    private bool BecomeSingleInstance(string? link)
     {
         instance = new Mutex(true, InstanceName, out var first);
         if (!first)
         {
+            if (link != null)
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(PendingLinkPath)!);
+                    File.WriteAllText(PendingLinkPath, link);
+                }
+                catch (IOException)
+                {
+                }
+            }
             try
             {
                 using var other = EventWaitHandle.OpenExisting(InstanceName + ".Show");
@@ -115,9 +134,30 @@ public partial class App : Application
         new Thread(() =>
         {
             while (signal.WaitOne())
-                Dispatcher.BeginInvoke(ShowMainWindow);
+                Dispatcher.BeginInvoke(async () =>
+                {
+                    ShowMainWindow();
+                    if (TakePendingLink() is { } pending && vm != null)
+                        await vm.HandleLinkAsync(pending, fromOutside: true);
+                });
         }) { IsBackground = true, Name = "Show signal" }.Start();
         return true;
+    }
+
+    private static string? TakePendingLink()
+    {
+        try
+        {
+            if (!File.Exists(PendingLinkPath))
+                return null;
+            var text = File.ReadAllText(PendingLinkPath).Trim();
+            File.Delete(PendingLinkPath);
+            return MainViewModel.IsAppLink(text) ? text : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     private void ShowMainWindow()
