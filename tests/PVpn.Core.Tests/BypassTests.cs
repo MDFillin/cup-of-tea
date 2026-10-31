@@ -21,6 +21,8 @@ public class BypassTests
 
     private static readonly Profile Hy2Hop = LinkParser.Parse(LinkParserTests.Hy2Link.Replace(":443?", ":443,20000-30000?"));
 
+    private static readonly Profile Hy2Obfs = LinkParser.Parse(LinkParserTests.Hy2Link.Replace(":443?", ":8443?obfs=salamander&obfs-password=0bf5&mport=30000-39999&"));
+
     private static JsonObject Proxy(Profile profile, BypassOptions bypass) =>
         (JsonObject)XrayConfigBuilder.Build(profile, ConfigBuilderTests.TunOptions() with { Bypass = BypassRules.Validate(bypass) })["outbounds"]![0]!;
 
@@ -173,6 +175,18 @@ public class BypassTests
     }
 
     [Fact]
+    public void SalamanderIsInnermostMask()
+    {
+        var masks = Proxy(Hy2Obfs, BypassOptions.Default)["streamSettings"]!["finalmask"]!["udp"]!.AsArray();
+        Assert.Equal(["salamander", "noise", "udphop"], masks.Select(m => (string?)m!["type"]));
+        Assert.Equal("0bf5", (string?)masks[0]!["settings"]!["password"]);
+        Assert.Equal("30000-39999", (string?)masks[2]!["settings"]!["remotePorts"]);
+        // Без обфускации маски salamander нет.
+        Assert.DoesNotContain(Proxy(Hy2Hop, BypassOptions.Default)["streamSettings"]!["finalmask"]!["udp"]!.AsArray(),
+            m => (string?)m!["type"] == "salamander");
+    }
+
+    [Fact]
     public void BypassSurvivesIpcRoundTrip()
     {
         var options = new ConnectOptions
@@ -214,6 +228,8 @@ public class BypassTests
         { "hy2-hop", new BypassOptions { NoiseType = "base64", NoisePacket = "AAECAwQ=", NoiseDelay = "0", HopIntervalSeconds = 10 } },
         { "hy2-hop", new BypassOptions { NoiseType = "hex", NoisePacket = "deadbeef" } },
         { "hy2-hop", new BypassOptions { NoiseType = "str", NoisePacket = "hello" } },
+        { "hy2-obfs", BypassOptions.Default },
+        { "hy2-obfs", new BypassOptions { Noises = false } },
     };
 
     [Theory]
@@ -227,6 +243,7 @@ public class BypassTests
             "vision" => Vision,
             "plain" => PlainReality,
             "hy2" => Hy2,
+            "hy2-obfs" => Hy2Obfs,
             _ => Hy2Hop,
         };
         var cores = CorePaths.Resolve(allowDevFallback: true);

@@ -97,9 +97,21 @@ public sealed record Hysteria2Profile : Profile
     /// </summary>
     public string? HopPorts { get; init; }
 
-    public override string ProtocolLabel => HopPorts == null ? "Hysteria2" : "Hysteria2 (смена портов)";
+    /// <summary>
+    /// Пароль обфускации salamander (obfs=salamander&amp;obfs-password=… в ссылке); null — без обфускации.
+    /// Пакеты QUIC шифруются этим паролем, и фильтр провайдера не узнаёт в них Hysteria2.
+    /// </summary>
+    public string? ObfsPassword { get; init; }
+
+    public override string ProtocolLabel => (HopPorts, ObfsPassword) switch
+    {
+        (null, null) => "Hysteria2",
+        (null, _) => "Hysteria2 (salamander)",
+        (_, null) => "Hysteria2 (смена портов)",
+        _ => "Hysteria2 (salamander, смена портов)",
+    };
 
     public override ServerTransport Transport => ServerTransport.Udp;
 
-    public override IReadOnlyList<string> Secrets => [Auth];
+    public override IReadOnlyList<string> Secrets => ObfsPassword == null ? [Auth] : [Auth, ObfsPassword];
 }

@@ -323,6 +323,9 @@ public static class XrayConfigBuilder
 
         // Последняя ступень маскировки UDP: первый элемент — внутренний слой.
         var udpMasks = new JsonArray();
+        // Salamander шифрует сами пакеты QUIC — самый внутренний слой; шум и смена портов работают поверх него.
+        if (p.ObfsPassword != null)
+            udpMasks.Add(new JsonObject { ["type"] = "salamander", ["settings"] = new JsonObject { ["password"] = p.ObfsPassword } });
         if (bypass.Noises)
             udpMasks.Add(new JsonObject { ["type"] = "noise", ["settings"] = new JsonObject { ["noise"] = new JsonArray { BuildNoise(bypass) } } });
         if (p.HopPorts != null)

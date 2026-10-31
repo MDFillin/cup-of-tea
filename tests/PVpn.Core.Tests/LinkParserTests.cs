@@ -144,6 +144,19 @@ public class LinkParserTests
     }
 
     [Fact]
+    public void ParsesHysteria2Salamander()
+    {
+        var p = Assert.IsType<Hysteria2Profile>(LinkParser.Parse(
+            $"hy2://pass@203.0.113.10:8443?sni=www.example.nl&pinSHA256={Pin}&obfs=salamander&obfs-password=0bf5-s3cret&mport=30000-39999#obfs"));
+        Assert.Equal("0bf5-s3cret", p.ObfsPassword);
+        Assert.Contains("0bf5-s3cret", p.Secrets);
+        Assert.Equal("Hysteria2 (salamander, смена портов)", p.ProtocolLabel);
+
+        var e = Assert.Throws<LinkParseException>(() => LinkParser.Parse("hy2://pass@203.0.113.10:443?obfs=salamander#x"));
+        Assert.Contains("obfs-password", e.Message);
+    }
+
+    [Fact]
     public void RejectsInvalidExtraJson()
     {
         var link = XhttpLink.Replace("#my-xhttp", "&extra=%7Bbroken#my-xhttp");

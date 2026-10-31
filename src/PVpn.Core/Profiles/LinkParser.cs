@@ -133,9 +133,15 @@ public static partial class LinkParser
                 throw new LinkParseException($"Неверный диапазон портов mport=«{mport}»");
         }
 
-        var obfs = q.GetValueOrDefault("obfs");
-        if (obfs is not (null or "" or "none"))
-            throw new LinkParseException($"Обфускация hy2 «{obfs}» пока не поддерживается");
+        var obfs = q.GetValueOrDefault("obfs")?.ToLowerInvariant();
+        string? obfsPassword = null;
+        if (obfs == "salamander")
+        {
+            obfsPassword = NullIfEmpty(q.GetValueOrDefault("obfs-password"))
+                           ?? throw new LinkParseException("Обфускация salamander без пароля (obfs-password)");
+        }
+        else if (obfs is not (null or "" or "none"))
+            throw new LinkParseException($"Обфускация hy2 «{obfs}» не поддерживается (есть salamander)");
 
         var pin = NullIfEmpty(q.GetValueOrDefault("pinSHA256"));
         if (pin != null && !IsSha256Hex(pin))
@@ -157,6 +163,7 @@ public static partial class LinkParser
             Insecure = insecure,
             Alpn = NullIfEmpty(q.GetValueOrDefault("alpn")),
             HopPorts = hopPorts,
+            ObfsPassword = obfsPassword,
         };
     }
 
