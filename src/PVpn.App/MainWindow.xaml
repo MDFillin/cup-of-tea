@@ -836,6 +836,19 @@
                                             <ui:TextBox Grid.Column="2" Text="{Binding HotkeyText, UpdateSourceTrigger=PropertyChanged}" Width="170" VerticalAlignment="Center"
                                                         PlaceholderText="Ctrl+Alt+P" AutomationProperties.Name="Горячая клавиша" />
                                         </Grid>
+                                        <Border Style="{StaticResource Separator}" />
+                                        <Grid Style="{StaticResource Row}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ArrowSync24" FontSize="18" /></ContentControl>
+                                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                                <TextBlock Style="{StaticResource Title}"><Run Text="Обновления · версия" /> <Run Text="{Binding AppVersion, Mode=OneWay}" /></TextBlock>
+                                                <TextBlock Text="Проверяются раз в день. Установщик берётся только из релизов на GitHub, SHA256 сверяется с опубликованным." Style="{StaticResource Sub}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding UpdateText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                           Visibility="{Binding UpdateText, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                                            </StackPanel>
+                                            <ui:Button Grid.Column="2" Content="{Binding UpdateButtonText}" Command="{Binding UpdateAppCommand}" VerticalAlignment="Center"
+                                                       AutomationProperties.Name="Обновление программы" />
+                                        </Grid>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

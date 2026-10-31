@@ -97,6 +97,10 @@ public sealed class AppSettings
     public bool GeoAutoUpdate { get; set; } = true;
     public int GeoUpdateDays { get; set; } = 7;
     public DateTimeOffset? GeoLastAttempt { get; set; }
+
+    /// <summary>Обновление программы: когда проверяли и о какой версии уже сообщили (чтобы не повторяться).</summary>
+    public DateTimeOffset? AppUpdateChecked { get; set; }
+    public string? AppUpdateNotified { get; set; }
     public SplitTunnelSettings SplitTunnel { get; set; } = new();
 
     public static AppSettings Load()

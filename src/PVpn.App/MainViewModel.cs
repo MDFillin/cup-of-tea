@@ -788,6 +788,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 _ = RefreshCustomRoutingAsync();
             if (tick % 300 == 50)
                 _ = MaybeUpdateGeoAsync();
+            if (tick % 300 == 70)
+                _ = MaybeCheckAppUpdateAsync();
             if (proxy != null || proxyStarting)
                 await PollProxyAsync();
             else

@@ -19,6 +19,12 @@ public static class Product
     /// <summary>Прежние имена (служба, папки, автозапуск), от новых к старым — для переноса данных и удаления старой установки.</summary>
     public static readonly string[] LegacyIds = ["TempestVPN", "PVpn"];
 
+    /// <summary>
+    /// Репозиторий GitHub («владелец/имя»), в релизах которого лежит установщик CupOfTea-Setup-x.y.z.exe — оттуда
+    /// программа обновляет себя. Пусто — обновление из программы не настроено.
+    /// </summary>
+    public const string UpdateRepository = "";
+
     /// <summary>Папка данных пользователя или машины: %APPDATA%\CupOfTea, %LOCALAPPDATA%\CupOfTea, C:\ProgramData\CupOfTea.</summary>
     public static string DataDir(Environment.SpecialFolder root) => IsPortable
         ? Path.Combine(AppContext.BaseDirectory, "data", root == Environment.SpecialFolder.LocalApplicationData ? "local" : "roaming")

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -35,7 +34,6 @@ public sealed partial class CoreUpdater(CorePaths cores, HttpClient http, Action
     public const long MaxArchiveBytes = 200L * 1024 * 1024;
 
     /// <summary>Откуда разрешено скачивать архивы (GitHub перенаправляет на свои хранилища).</summary>
-    private static readonly string[] AllowedHosts = ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"];
 
     public string PreviousDirectory => PreviousDirectoryOf(cores);
     private string StagingDirectory => Path.Combine(Path.GetDirectoryName(cores.Directory.TrimEnd('\\'))!, "cores-staging");
@@ -127,19 +125,18 @@ public sealed partial class CoreUpdater(CorePaths cores, HttpClient http, Action
         {
             if (asset.GetProperty("name").GetString() != expected)
                 continue;
-            var digest = asset.TryGetProperty("digest", out var d) ? d.GetString() : null;
-            if (digest is null || !digest.StartsWith("sha256:", StringComparison.Ordinal) || digest.Length != 7 + 64)
-                throw new CoreUpdateException($"GitHub не указал SHA256 для {expected} — без него обновление не ставлю");
+            var sha256 = GitHubDownload.Sha256Of(asset.TryGetProperty("digest", out var d) ? d.GetString() : null)
+                         ?? throw new CoreUpdateException($"GitHub не указал SHA256 для {expected} — без него обновление не ставлю");
             var url = new Uri(asset.GetProperty("browser_download_url").GetString()!);
             CheckHost(url);
-            return new CoreRelease(kind, version, url, digest[7..].ToLowerInvariant(), asset.GetProperty("size").GetInt64());
+            return new CoreRelease(kind, version, url, sha256, asset.GetProperty("size").GetInt64());
         }
         throw new CoreUpdateException($"В релизе {Title(kind)} {version} нет архива {expected}");
     }
 
     internal static void CheckHost(Uri url)
     {
-        if (url.Scheme != Uri.UriSchemeHttps || !AllowedHosts.Contains(url.Host, StringComparer.OrdinalIgnoreCase))
+        if (!GitHubDownload.IsAllowed(url))
             throw new CoreUpdateException($"Ссылка на архив ведёт не на GitHub: {url.Host}");
     }
 
@@ -253,32 +250,8 @@ public sealed partial class CoreUpdater(CorePaths cores, HttpClient http, Action
     {
         if (release.Size > MaxArchiveBytes)
             throw new CoreUpdateException($"Архив {Title(release.Kind)} слишком большой ({release.Size / 1024 / 1024} МБ)");
-        using var response = await http.GetAsync(release.Download, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        // После перенаправлений адрес тоже должен остаться на GitHub.
-        if (response.RequestMessage?.RequestUri is { } final)
-            CheckHost(final);
-        if (!response.IsSuccessStatusCode)
-            throw new CoreUpdateException($"GitHub ответил {(int)response.StatusCode} при скачивании {Title(release.Kind)}");
-
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        await using (var input = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
-        await using (var output = File.Create(path))
-        {
-            var buffer = new byte[81920];
-            long total = 0;
-            int read;
-            while ((read = await input.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
-            {
-                total += read;
-                if (total > MaxArchiveBytes)
-                    throw new CoreUpdateException($"Архив {Title(release.Kind)} больше {MaxArchiveBytes / 1024 / 1024} МБ");
-                sha.AppendData(buffer, 0, read);
-                await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-            }
-        }
-        var actual = Convert.ToHexStringLower(sha.GetHashAndReset());
-        if (actual != release.Sha256)
-            throw new CoreUpdateException($"SHA256 архива {Title(release.Kind)} не совпадает с указанным на GitHub ({actual} ≠ {release.Sha256}) — архив повреждён или подменён");
+        await GitHubDownload.DownloadAsync(http, release.Download, release.Sha256, MaxArchiveBytes, path,
+            problem => new CoreUpdateException($"Архив {Title(release.Kind)}: {problem}"), ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>Базы для правил geoip:/geosite: в маршрутах xray; лежат рядом с xray.exe.</summary>

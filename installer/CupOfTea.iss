@@ -46,6 +46,8 @@ Source: "{#Bundle}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cre
 
 [Run]
 Filename: "{app}\CupOfTea.exe"; Description: "Запустить The Cup of Tea"; Flags: postinstall nowait skipifsilent runasoriginaluser; Check: Installed
+; Обновление из программы (тихая установка с /RELAUNCH=1): программа закрылась перед установкой — запускаем снова.
+Filename: "{app}\CupOfTea.exe"; Flags: nowait runasoriginaluser; Check: Relaunch
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
@@ -94,6 +96,11 @@ end;
 function Installed: Boolean;
 begin
   Result := InstallOk;
+end;
+
+function Relaunch: Boolean;
+begin
+  Result := InstallOk and WizardSilent and (ExpandConstant('{param:RELAUNCH|0}') = '1');
 end;
 
 // Код выхода установщика при ошибке скрипта — для тихой установки (/VERYSILENT) и тестов.
