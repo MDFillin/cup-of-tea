@@ -47,7 +47,8 @@ Source: "{#Bundle}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cre
 [Run]
 Filename: "{app}\CupOfTea.exe"; Description: "Запустить The Cup of Tea"; Flags: postinstall nowait skipifsilent runasoriginaluser; Check: Installed
 ; Обновление из программы (тихая установка с /RELAUNCH=1): программа закрылась перед установкой — запускаем снова.
-Filename: "{app}\CupOfTea.exe"; Flags: nowait runasoriginaluser; Check: Relaunch
+; Именно postinstall: обычные записи [Run] выполняются раньше настройки службы (до InstallOk).
+Filename: "{app}\CupOfTea.exe"; Flags: postinstall nowait runasoriginaluser; Check: Relaunch
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \

@@ -10,7 +10,7 @@ namespace PVpn.Core.Net;
 
 /// <summary>
 /// Kill switch на WFP. Пока он включён, наружу выходит только: трафик через TUN, сами ядра
-/// (xray — к серверу, sing-box — в локальную сеть), loopback, DHCP и локальные сети. DNS (порт 53) мимо TUN закрыт.
+/// (xray — к серверу, sing-box — в локальную сеть), loopback, DHCP (и как клиент, и как сервер общего доступа) и локальные сети. DNS (порт 53) мимо TUN закрыт.
 /// Сессия WFP не динамическая: фильтры переживают падение ядер и самой службы (пока служба перезапускается,
 /// утечки нет). Снимаются явно (<see cref="Disable"/>) или перезагрузкой — постоянными (persistent) не делаются.
 /// </summary>
@@ -75,6 +75,12 @@ public static unsafe class KillSwitch
                     c.Protocol(IpProtoUdp), c.RemotePort(67));
                 AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCP",
                     c.Protocol(IpProtoUdp), c.LocalPort(68));
+                // Компьютер сам раздаёт адреса (общий доступ: Hyper-V Default Switch, WSL, мобильный хот-спот). Запрос
+                // приходит с 0.0.0.0 — под «локальные сети» он не попадает, и без этого виртуалки остаются без адреса.
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCP-сервер",
+                    c.Protocol(IpProtoUdp), c.LocalPort(67));
+                AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCP-сервер",
+                    c.Protocol(IpProtoUdp), c.RemotePort(68));
                 AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCPv6",
                     c.Protocol(IpProtoUdp), c.RemotePort(547));
                 AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6, WeightDhcp, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: DHCPv6",
