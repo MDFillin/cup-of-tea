@@ -48,6 +48,12 @@ public sealed record XrayOptions
     /// (российские сайты напрямую и т. п.). false — всё через сервер, кроме локальных сетей.
     /// </summary>
     public bool UseServerRouting { get; init; } = true;
+
+    /// <summary>
+    /// Заранее разрешённые адреса серверов из конфига подписки (домен → IP): попадают в dns.hosts, и xray не зависит
+    /// от DNS при подключении к серверам. Без этого с привязкой к адаптеру проверки автовыбора часто не проходили.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? ResolvedHosts { get; init; }
 }
 
 public sealed class ConfigException(string message) : Exception(message);

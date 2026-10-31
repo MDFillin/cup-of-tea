@@ -1059,7 +1059,7 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                     <TextBlock Style="{StaticResource Hint}"
-                                               Text="Ссылку даёт панель сервера (Remnawave, 3x-ui, Marzban). Серверы обновляются сами раз в 12 часов или как скажет панель; трафик и срок — из её ответа. Поддерживаются VLESS и Hysteria2." />
+                                               Text="Ссылку даёт панель сервера (Remnawave, 3x-ui, Marzban). Серверы обновляются сами раз в 12 часов или как скажет панель; трафик и срок — из её ответа. Ссылки VLESS и Hysteria2; если панель отдаёт полные конфиги — любые серверы xray (trojan, gRPC и др.) с её маршрутами и автовыбором." />
                                 </StackPanel>
 
                                 <!-- Ядра -->

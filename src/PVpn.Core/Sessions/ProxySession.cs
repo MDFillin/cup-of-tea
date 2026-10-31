@@ -74,6 +74,7 @@ public sealed class ProxySession : IAsyncDisposable
         string? bind = null;
         if (options.BindToPhysicalInterface)
             bind = NetworkInfo.GetDefaultPhysicalInterface()?.Name;
+        var resolved = profile is XrayConfigProfile server ? await ServerConfigs.ResolveHostsAsync(server, ct).ConfigureAwait(false) : null;
 
         var config = XrayConfigBuilder.Build(profile, new XrayOptions
         {
@@ -86,6 +87,7 @@ public sealed class ProxySession : IAsyncDisposable
             SplitTunnel = options.SplitTunnel is { } split ? SplitTunnelRules.Validate(split) : null,
             MetricsPort = metricsPort,
             UseServerRouting = options.UseServerRouting,
+            ResolvedHosts = resolved,
         });
 
         var sanitizer = new LogSanitizer(profile.Secrets);

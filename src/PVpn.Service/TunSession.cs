@@ -91,6 +91,9 @@ internal sealed class TunSession
     /// <summary>IP остальных серверов конфига из подписки (автовыбор, цепочки): их тоже мимо TUN.</summary>
     private IReadOnlyList<IPAddress> extraServerIps = [];
 
+    /// <summary>Домены серверов конфига → IP (см. XrayOptions.ResolvedHosts).</summary>
+    private IReadOnlyDictionary<string, string> resolvedHosts = new Dictionary<string, string>();
+
     private static bool BlocksQuic(Profile p, ConnectOptions o) => SingBoxConfigBuilder.BlocksQuic(p, o.BlockQuic);
 
     public static async Task<TunSession> StartAsync(Profile profile, ConnectOptions options, CorePaths cores, ServiceLog log,
@@ -134,7 +137,7 @@ internal sealed class TunSession
             log.Info($"Адаптер {InterfaceName} остался от прошлого подключения, sing-box использует его");
 
         ServerIp = await ResolveServerAsync(Profile.Host, ct).ConfigureAwait(false);
-        extraServerIps = await ResolveExtraServersAsync(Profile, ServerIp, ct).ConfigureAwait(false);
+        (extraServerIps, resolvedHosts) = await ResolveExtraServersAsync(Profile, ServerIp, ct).ConfigureAwait(false);
 
         progress("Прокладываю маршрут к серверу");
         StateJournal.Update(j => j with { Profile = Profile.Name, StartedAt = DateTimeOffset.Now });
@@ -193,12 +196,13 @@ internal sealed class TunSession
     {
         var sw = Stopwatch.StartNew();
         var ip = await ResolveServerAsync(profile.Host, ct).ConfigureAwait(false);
-        var extra = await ResolveExtraServersAsync(profile, ip, ct).ConfigureAwait(false);
+        var (extra, hosts) = await ResolveExtraServersAsync(profile, ip, ct).ConfigureAwait(false);
         // sing-box уже исключил из TUN адреса прежних серверов; новые без перезапуска TUN не исключить.
         if (extra.Except(extraServerIps).Any())
             throw new SessionException("У нового сервера другие адреса автовыбора — нужен перезапуск TUN");
         Profile = profile;
         options = next;
+        resolvedHosts = hosts;
         sanitizer = new LogSanitizer([.. profile.Secrets, SocksCredential.Password]);
         if (!ip.Equals(ServerIp))
         {
@@ -235,6 +239,7 @@ internal sealed class TunSession
             Bypass = options.Bypass ?? BypassOptions.Default,
             MetricsPort = MetricsPort,
             UseServerRouting = options.UseServerRouting,
+            ResolvedHosts = resolvedHosts,
         });
         Xray = CoreProcess.Start("xray", cores.Xray, ["run", "-c", "stdin:"], config.ToJsonString(), sanitizer, log.Write);
         if (!await Ports.WaitListeningAsync(SocksPort, TimeSpan.FromSeconds(10), () => Xray.HasExited, ct).ConfigureAwait(false))
@@ -448,23 +453,19 @@ internal sealed class TunSession
     /// Адреса остальных серверов конфига из подписки. Не разрешился какой-то — не беда: xray и так привязан к
     /// физическому адаптеру, исключение из TUN — лишь дополнительная защита от петли.
     /// </summary>
-    private static async Task<IReadOnlyList<IPAddress>> ResolveExtraServersAsync(Profile profile, IPAddress main, CancellationToken ct)
+    private static async Task<(IReadOnlyList<IPAddress> Ips, IReadOnlyDictionary<string, string> Hosts)> ResolveExtraServersAsync(
+        Profile profile, IPAddress main, CancellationToken ct)
     {
         if (profile is not XrayConfigProfile server)
-            return [];
-        var hosts = ServerConfigs.ServerHosts(server).Where(h => !string.Equals(h, profile.Host, StringComparison.OrdinalIgnoreCase)).Take(32);
-        var resolved = await Task.WhenAll(hosts.Select(async h =>
-        {
-            try
-            {
-                return await ResolveServerAsync(h, ct).ConfigureAwait(false);
-            }
-            catch (SessionException)
-            {
-                return null;
-            }
-        })).ConfigureAwait(false);
-        return resolved.OfType<IPAddress>().Where(ip => !ip.Equals(main)).Distinct().Order(Comparer<IPAddress>.Create((a, b) => string.CompareOrdinal(a.ToString(), b.ToString()))).ToList();
+            return ([], new Dictionary<string, string>());
+        var hosts = new Dictionary<string, string>(await ServerConfigs.ResolveHostsAsync(server, ct).ConfigureAwait(false), StringComparer.OrdinalIgnoreCase);
+        if (!IPAddress.TryParse(profile.Host, out _))
+            hosts[profile.Host] = main.ToString();
+        var ips = ServerConfigs.ServerHosts(server)
+            .Select(h => IPAddress.TryParse(h, out var ip) ? ip : hosts.TryGetValue(h, out var r) ? IPAddress.Parse(r) : null)
+            .OfType<IPAddress>().Where(ip => !ip.Equals(main)).Distinct()
+            .Order(Comparer<IPAddress>.Create((a, b) => string.CompareOrdinal(a.ToString(), b.ToString()))).ToList();
+        return (ips, hosts);
     }
 
     private static async Task<IPAddress> ResolveServerAsync(string host, CancellationToken ct)

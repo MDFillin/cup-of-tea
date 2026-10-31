@@ -255,6 +255,30 @@ public static class ServerConfigs
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>
+    /// Разрешает домены серверов конфига (по несколько сразу, до 5 с на каждый). Не разрешился — пропускается:
+    /// тогда xray спросит свой DNS сам.
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<string, string>> ResolveHostsAsync(XrayConfigProfile profile, CancellationToken ct = default)
+    {
+        var names = ServerHosts(profile).Where(h => !IPAddress.TryParse(h, out _)).Take(32).ToList();
+        var results = await Task.WhenAll(names.Select(async host =>
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            try
+            {
+                var addresses = await Dns.GetHostAddressesAsync(host, System.Net.Sockets.AddressFamily.InterNetwork, timeout.Token).ConfigureAwait(false);
+                return (host, ip: addresses.FirstOrDefault()?.ToString());
+            }
+            catch (Exception e) when (e is System.Net.Sockets.SocketException || (e is OperationCanceledException && !ct.IsCancellationRequested))
+            {
+                return (host, ip: (string?)null);
+            }
+        })).ConfigureAwait(false);
+        return results.Where(r => r.ip != null).ToDictionary(r => r.host, r => r.ip!, StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>Есть ли у сервера свой DNS (тогда в TUN запросы DNS отдаются ему, а не DoH приложения).</summary>
     public static bool HasDns(XrayConfigProfile profile) =>
         JsonNode.Parse(profile.Config)?["dns"] is JsonObject { Count: > 0 };
@@ -273,6 +297,19 @@ public static class ServerConfigs
         var outbounds = (JsonArray)config["outbounds"]!;
         foreach (var o in outbounds.OfType<JsonObject>())
             Bind(o, options.BindInterface);
+        if (options.ResolvedHosts is { Count: > 0 } resolved)
+        {
+            var dns = config["dns"] as JsonObject ?? new JsonObject();
+            config["dns"] = dns;
+            var hosts = dns["hosts"] as JsonObject ?? new JsonObject();
+            dns["hosts"] = hosts;
+            foreach (var (host, ip) in resolved)
+            {
+                // Своё сопоставление из подписки главнее.
+                if (!hosts.ContainsKey(host) && System.Net.IPAddress.TryParse(ip, out _))
+                    hosts[host] = new JsonArray(ip);
+            }
+        }
 
         var routing = config["routing"] as JsonObject ?? new JsonObject();
         var rules = routing["rules"] as JsonArray ?? new JsonArray();

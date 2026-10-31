@@ -121,6 +121,21 @@ public class ServerConfigTests
     }
 
     [Fact]
+    public void ResolvedServerAddressesGoToDnsHosts()
+    {
+        var raw = Sample();
+        raw["dns"]!["hosts"] = new JsonObject { ["b.example.com"] = new JsonArray("198.51.100.2") };
+        var c = XrayConfigBuilder.Build(Server(raw), Tun with
+        {
+            ResolvedHosts = new Dictionary<string, string> { ["a.example.com"] = "198.51.100.1", ["b.example.com"] = "198.51.100.9" },
+        });
+        var hosts = c["dns"]!["hosts"]!;
+        Assert.Equal("198.51.100.1", (string?)hosts["a.example.com"]![0]);
+        // Сопоставление из подписки не перезаписывается.
+        Assert.Equal("198.51.100.2", (string?)hosts["b.example.com"]![0]);
+    }
+
+    [Fact]
     public void ServerRoutingCanBeTurnedOff()
     {
         var on = Rules(XrayConfigBuilder.Build(Server(), Tun));
