@@ -377,6 +377,40 @@ public static class ServerConfigs
     }
 
     /// <summary>
+    /// Выходы для пинга (<see cref="Sessions.BatchPing"/>): основной сервер конфига под тегом <paramref name="tag"/> и,
+    /// если он подключается через другой выход (dialerProxy, цепочка), — тот тоже, под своим тегом. Привязаны к адаптеру.
+    /// </summary>
+    internal static IReadOnlyList<JsonObject> PingOutbounds(XrayConfigProfile profile, string tag, string? bindInterface)
+    {
+        var config = Sanitize(JsonNode.Parse(profile.Config) as JsonObject ?? throw new ConfigException("Конфиг сервера повреждён"));
+        var outbounds = Outbounds(config);
+        var main = (MainOutbound(config, outbounds) ?? outbounds.FirstOrDefault(IsNetwork)
+                    ?? throw new ConfigException("в конфиге нет сервера")).DeepClone().AsObject();
+        main["tag"] = tag;
+        var result = new List<JsonObject> { main };
+        var dialer = (string?)main["streamSettings"]?["sockopt"]?["dialerProxy"] ?? (string?)main["proxySettings"]?["tag"];
+        if (dialer != null && outbounds.FirstOrDefault(o => (string?)o["tag"] == dialer) is { } via)
+        {
+            var copy = via.DeepClone().AsObject();
+            copy["tag"] = tag + "-via";
+            copy["streamSettings"]?["sockopt"]?.AsObject().Remove("dialerProxy");
+            if (main["streamSettings"]?["sockopt"]?["dialerProxy"] != null)
+                main["streamSettings"]!["sockopt"]!["dialerProxy"] = tag + "-via";
+            else
+                main["proxySettings"]!["tag"] = tag + "-via";
+            result.Add(copy);
+        }
+        else if (dialer != null)
+        {
+            main["streamSettings"]?["sockopt"]?.AsObject().Remove("dialerProxy");
+            main.Remove("proxySettings");
+        }
+        foreach (var o in result)
+            Bind(o, bindInterface);
+        return result;
+    }
+
+    /// <summary>
     /// Все выходы, что сами ходят в сеть (серверы и прямой выход), привязываются к физическому адаптеру: иначе
     /// в TUN их соединения ушли бы в тот же туннель. Выходы через dialerProxy/proxySettings открывает другой выход.
     /// </summary>

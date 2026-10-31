@@ -148,10 +148,16 @@ public static class DelayTester
         {
             using (var warmup = await client.GetAsync(ProbeUrl, ct).ConfigureAwait(false))
                 warmup.EnsureSuccessStatusCode();
-            var sw = Stopwatch.StartNew();
-            using var response = await client.GetAsync(ProbeUrl, ct).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            return new DelayResult((int)sw.ElapsedMilliseconds, null);
+            // Лучшее из двух замеров: при параллельной проверке многих серверов одиночный замер шумит.
+            var best = int.MaxValue;
+            for (var i = 0; i < 2; i++)
+            {
+                var sw = Stopwatch.StartNew();
+                using var response = await client.GetAsync(ProbeUrl, ct).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                best = Math.Min(best, (int)sw.ElapsedMilliseconds);
+            }
+            return new DelayResult(best, null);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {

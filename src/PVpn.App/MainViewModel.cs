@@ -534,8 +534,40 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         var items = Profiles.ToList();
         foreach (var item in items)
             item.Checking = true;
-        using var limit = new SemaphoreSlim(ParallelDelayChecks);
         try
+        {
+            // Один xray на все серверы; не запустился (например, из-за одного кривого сервера) — по одному, как раньше.
+            var byId = items.ToDictionary(i => i.Profile.Id);
+            try
+            {
+                await BatchPing.MeasureAsync(items.Select(i => new PingTarget(i.Profile, BypassFor(i.Profile, settings.Bypass))).ToList(), cores,
+                    (id, delay) => Application.Current?.Dispatcher.BeginInvoke(() =>
+                    {
+                        if (byId.TryGetValue(id, out var item))
+                        {
+                            item.Delay = delay;
+                            item.Checking = false;
+                        }
+                    }));
+                return;
+            }
+            catch (Exception e) when (e is InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
+            {
+                AppendLog("app", $"Пинг одним процессом не вышел ({e.Message.Split('\n')[0]}), проверяю по одному");
+            }
+            await PingOneByOneAsync(items.Where(i => i.Checking).ToList(), cores);
+        }
+        finally
+        {
+            foreach (var item in items)
+                item.Checking = false;
+            checkingDelays = false;
+        }
+    }
+
+    private async Task PingOneByOneAsync(IReadOnlyList<ProfileItem> items, CorePaths cores)
+    {
+        using var limit = new SemaphoreSlim(ParallelDelayChecks);
         {
             await Task.WhenAll(items.Select(async item =>
             {
@@ -556,10 +588,6 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                     limit.Release();
                 }
             }));
-        }
-        finally
-        {
-            checkingDelays = false;
         }
     }
 
