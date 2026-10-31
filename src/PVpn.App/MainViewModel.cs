@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Text;
 using System.Windows;
 using System.Windows.Media;
@@ -12,6 +13,7 @@ using PVpn.Core.Config;
 using PVpn.Core.Cores;
 using PVpn.Core.Diagnostics;
 using PVpn.Core.Ipc;
+using PVpn.Core.Net;
 using PVpn.Core.Profiles;
 using PVpn.Core.Sessions;
 using PVpn.Core.SystemProxy;
@@ -39,6 +41,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private bool proxyStarting;
     private DateTimeOffset proxySince;
     private DateTime proxyNextCheck;
+    private readonly ProxyWatchdog watchdog = new();
     private long logSeq;
     private bool polling;
     private bool loadingSettings;
@@ -693,8 +696,11 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         await PollAsync();
     }
 
-    private async Task ConnectProxyAsync(Profile profile)
+    /// <param name="restart">Перезапуск сторожем: его счётчики не сбрасываются.</param>
+    private async Task ConnectProxyAsync(Profile profile, bool restart = false)
     {
+        if (!restart)
+            watchdog.Reset();
         if (ReadBypass(profile) is not { } bypass)
             return;
         CorePaths cores;
@@ -818,6 +824,11 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         sessionSince = proxySince;
         if (session.Xray.HasExited)
         {
+            if (watchdog.CoreExited() == WatchdogAction.Restart)
+            {
+                await RestartProxyAsync("xray неожиданно завершился");
+                return;
+            }
             AppendLog("app", "xray неожиданно завершился, прокси выключен");
             await StopProxyAsync();
             SetState(UiState.Error, "Ошибка", "xray завершился. Подробности — в «Журнале».");
@@ -826,13 +837,53 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         SetState(UiState.On, "Подключено", $"Режим прокси · SOCKS 127.0.0.1:{session.SocksPort} · HTTP 127.0.0.1:{session.HttpPort}");
         if (DateTime.UtcNow < proxyNextCheck)
             return;
-        proxyNextCheck = DateTime.UtcNow.AddSeconds(30);
-        var ip = await DelayTester.GetPublicIpViaSocksAsync(session.SocksPort, TimeSpan.FromSeconds(10));
+        proxyNextCheck = DateTime.UtcNow.Add(ProxyWatchdog.CheckInterval);
         var delay = await DelayTester.HttpDelayViaSocksAsync(session.SocksPort, TimeSpan.FromSeconds(10));
+        var ip = delay.Ok ? await DelayTester.GetPublicIpViaSocksAsync(session.SocksPort, TimeSpan.FromSeconds(10)) : null;
         if (proxy != session)
             return;
         PublicIp = ip ?? "—";
         DelayText = delay.Ok ? $"{delay.Milliseconds} мс" : "нет ответа";
+        var gaveUp = watchdog.GaveUp;
+        var action = watchdog.Report(delay.Ok, NetworkInterface.GetIsNetworkAvailable());
+        proxyNextCheck = DateTime.UtcNow.Add(watchdog.NextCheckIn);
+        if (action == WatchdogAction.Restart)
+            await RestartProxyAsync($"сервер не отвечает ({delay.Error})");
+        else if (watchdog.GaveUp && !gaveUp)
+        {
+            AppendLog("app", $"Сторож: после {ProxyWatchdog.MaxRestarts} перезапусков сервер так и не ответил — дальше только наблюдаю");
+            Notification?.Invoke("Сервер не отвечает", $"Перезапуск xray не помог. Попробуйте другой сервер в {Brand.Name}.");
+        }
+    }
+
+    /// <summary>
+    /// Сторож: перезапуск xray с тем же сервером, не трогая состояние «выключено» (системный прокси вернётся к
+    /// новому порту сразу после запуска).
+    /// </summary>
+    private async Task RestartProxyAsync(string reason)
+    {
+        if (proxy is not { } old)
+            return;
+        AppendLog("app", $"Сторож: {reason} — перезапускаю xray (попытка {watchdog.Restarts} из {ProxyWatchdog.MaxRestarts})");
+        Notification?.Invoke("Переподключение", $"{ProfileData.PlainName(old.Profile.Name)}: {reason}. Перезапускаю соединение.");
+        proxy = null;
+        proxyStarting = true;
+        SetState(UiState.Busy, "Переподключение…", reason);
+        await old.DisposeAsync();
+        proxyStarting = false;
+        await ConnectProxyAsync(old.Profile, restart: true);
+        if (proxy == null && State == UiState.Busy)
+            SetState(UiState.Off, "Отключено", null);
+    }
+
+    /// <summary>Сменился физический адаптер (Wi-Fi → кабель): xray привязан к старому — перезапускаем.</summary>
+    private async Task CheckProxyAdapterAsync()
+    {
+        if (proxy is not { BoundInterface: { } bound } || proxyStarting)
+            return;
+        var current = await Task.Run(() => NetworkInfo.GetDefaultPhysicalInterface()?.Name);
+        if (current != null && current != bound)
+            await RestartProxyAsync($"сеть сменилась: «{bound}» → «{current}»");
     }
 
     private async Task PollServiceAsync()

@@ -58,6 +58,7 @@ public sealed partial class MainViewModel
         networkDebounce.Tick += async (_, _) =>
         {
             networkDebounce.Stop();
+            await CheckProxyAdapterAsync();
             await EvaluateNetworkAsync();
         };
         // Событие приходит пачкой (адреса, маршруты, TUN) — решаем через 3 с после последнего.
