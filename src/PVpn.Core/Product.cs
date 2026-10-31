@@ -23,7 +23,7 @@ public static class Product
     /// Репозиторий GitHub («владелец/имя»), в релизах которого лежит установщик CupOfTea-Setup-x.y.z.exe — оттуда
     /// программа обновляет себя. Пусто — обновление из программы не настроено.
     /// </summary>
-    public const string UpdateRepository = "";
+    public const string UpdateRepository = "MDFillin/cup-of-tea";
 
     /// <summary>Папка данных пользователя или машины: %APPDATA%\CupOfTea, %LOCALAPPDATA%\CupOfTea, C:\ProgramData\CupOfTea.</summary>
     public static string DataDir(Environment.SpecialFolder root) => IsPortable
