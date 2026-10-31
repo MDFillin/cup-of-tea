@@ -54,6 +54,9 @@ public sealed record XrayOptions
     /// от DNS при подключении к серверам. Без этого с привязкой к адаптеру проверки автовыбора часто не проходили.
     /// </summary>
     public IReadOnlyDictionary<string, string>? ResolvedHosts { get; init; }
+
+    /// <summary>Профиль маршрутизации (уже проверенный <see cref="RoutingProfiles.Validate"/>); null — всё через VPN.</summary>
+    public RoutingProfile? Routing { get; init; }
 }
 
 public sealed class ConfigException(string message) : Exception(message);
@@ -106,6 +109,12 @@ public static class XrayConfigBuilder
                 },
             });
             outbounds.Add(new JsonObject { ["tag"] = "block", ["protocol"] = "blackhole" });
+            if (options.Routing is { } tunRouting)
+            {
+                // Домен для правил — из SNI/HTTP (sing-box передаёт в xray уже IP); соединение идёт на тот же IP.
+                ((JsonObject)inbounds[0]!)["sniffing"] = Sniffing();
+                RoutingProfiles.Apply(config, tunRouting, ProxyTag, options.BindInterface, 0);
+            }
             return config;
         }
 
@@ -152,8 +161,24 @@ public static class XrayConfigBuilder
                 rules.Add(new JsonObject { ["type"] = "field", ["network"] = "tcp,udp", ["outboundTag"] = "direct" });
         }
         config["routing"] = new JsonObject { ["domainStrategy"] = "AsIs", ["rules"] = rules };
+        if (options.Routing is { } routing)
+        {
+            foreach (var inbound in inbounds.OfType<JsonObject>())
+                inbound["sniffing"] = Sniffing();
+            // После своих правил (локальные сети, сайты раздельного туннелирования), но до «остальное напрямую»
+            // режима «только выбранное».
+            var onlySelected = options.SplitTunnel is { IsEffective: true, Mode: SplitTunnelMode.OnlySelected };
+            RoutingProfiles.Apply(config, routing, ProxyTag, options.BindInterface, onlySelected ? rules.Count - 1 : rules.Count);
+        }
         return config;
     }
+
+    private static JsonObject Sniffing() => new()
+    {
+        ["enabled"] = true,
+        ["destOverride"] = new JsonArray("http", "tls", "quic"),
+        ["routeOnly"] = true,
+    };
 
     /// <summary>
     /// Статистика трафика (metrics на 127.0.0.1, HTTP /debug/vars); 0 — без неё. Считаются и выходы (у обычного

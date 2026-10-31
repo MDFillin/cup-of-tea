@@ -82,7 +82,7 @@ internal sealed class TunSession
     public bool CanSwitchTo(Profile nextProfile, ConnectOptions next) => SingBoxKey(Profile, options) == SingBoxKey(nextProfile, next);
 
     private static string SingBoxKey(Profile p, ConnectOptions o) => System.Text.Json.JsonSerializer.Serialize(
-        o with { Bypass = null, TestSeconds = 0, IgnoreConflicts = false, BlockQuic = BlocksQuic(p, o), UseServerRouting = DnsViaProxy(p, o) },
+        o with { Bypass = null, Routing = null, TestSeconds = 0, IgnoreConflicts = false, BlockQuic = BlocksQuic(p, o), UseServerRouting = DnsViaProxy(p, o) },
         IpcJsonContext.Default.ConnectOptions);
 
     /// <summary>У сервера из подписки свой DNS, и его маршруты включены — DNS решает xray (см. SingBoxOptions.DnsViaProxy).</summary>
@@ -240,6 +240,7 @@ internal sealed class TunSession
             MetricsPort = MetricsPort,
             UseServerRouting = options.UseServerRouting,
             ResolvedHosts = resolvedHosts,
+            Routing = options.Routing,
         });
         Xray = CoreProcess.Start("xray", cores.Xray, ["run", "-c", "stdin:"], config.ToJsonString(), sanitizer, log.Write);
         if (!await Ports.WaitListeningAsync(SocksPort, TimeSpan.FromSeconds(10), () => Xray.HasExited, ct).ConfigureAwait(false))

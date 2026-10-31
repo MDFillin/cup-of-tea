@@ -36,6 +36,9 @@ public sealed record ProxySessionOptions
 
     /// <summary>У серверов с конфигом из подписки — их маршруты (см. XrayOptions.UseServerRouting).</summary>
     public bool UseServerRouting { get; init; } = true;
+
+    /// <summary>Профиль маршрутизации (для серверов по ссылкам); проверяется при запуске.</summary>
+    public RoutingProfile? Routing { get; init; }
 }
 
 /// <summary>
@@ -88,6 +91,7 @@ public sealed class ProxySession : IAsyncDisposable
             MetricsPort = metricsPort,
             UseServerRouting = options.UseServerRouting,
             ResolvedHosts = resolved,
+            Routing = options.Routing is { } r ? RoutingProfiles.Validate(r) : null,
         });
 
         var sanitizer = new LogSanitizer(profile.Secrets);

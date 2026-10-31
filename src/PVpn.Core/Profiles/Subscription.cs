@@ -37,6 +37,22 @@ public sealed record Subscription
     /// <summary>Служебные строки панели вместо серверов: «Использовано 3.43/60 ГБ», «Трафик обхода 6 %».</summary>
     public IReadOnlyList<string> Notes { get; init; } = [];
 
+    /// <summary>Описание, объявление и ссылки от панели (заголовки profile-description, announce, support-url…).</summary>
+    public string? Description { get; init; }
+    public string? Announce { get; init; }
+    public string? AnnounceUrl { get; init; }
+    public string? SupportUrl { get; init; }
+    public string? WebPageUrl { get; init; }
+
+    /// <summary>Панель просит не показывать адрес подписки (hide-url).</summary>
+    public bool HideUrl { get; init; }
+
+    /// <summary>Как панель предлагает сортировать серверы: ping, name или none.</summary>
+    public string? SortOrder { get; init; }
+
+    /// <summary>Профиль маршрутизации от панели (заголовок routing или строка в подписке); null — не прислала.</summary>
+    public Routing.RoutingProfile? Routing { get; init; }
+
     public bool IsDue(DateTimeOffset now) =>
         AutoUpdate && (LastAttempt ?? DateTimeOffset.MinValue) < now - (LastError == null ? TimeSpan.FromHours(UpdateIntervalHours) : TimeSpan.FromMinutes(30));
 }
@@ -54,6 +70,25 @@ public sealed record SubscriptionFetch(
 {
     /// <summary>Служебные строки панели (см. <see cref="Subscription.Notes"/>).</summary>
     public IReadOnlyList<string> Notes { get; init; } = [];
+
+    public SubscriptionMeta Meta { get; init; } = new();
+}
+
+/// <summary>Что панель сообщила о себе заголовками или строками «#имя: значение» в теле подписки.</summary>
+public sealed record SubscriptionMeta
+{
+    public string? Description { get; init; }
+    public string? Announce { get; init; }
+    public string? AnnounceUrl { get; init; }
+    public string? SupportUrl { get; init; }
+    public string? WebPageUrl { get; init; }
+    public bool HideUrl { get; init; }
+    public string? SortOrder { get; init; }
+    public Routing.RoutingProfile? Routing { get; init; }
+
+    /// <summary>Панель переехала: новый полный адрес (new-url) или новый хост (new-domain). Только https.</summary>
+    public string? NewUrl { get; init; }
+    public string? NewDomain { get; init; }
 }
 
 /// <summary>Итог обновления подписки для сообщения пользователю.</summary>
@@ -95,8 +130,12 @@ public static partial class SubscriptionClient
         return uri.AbsoluteUri;
     }
 
-    /// <summary>Клиент для подписок. Панели отдают обычный список ссылок VPN-клиентам, а браузеру — страницу.</summary>
-    public static HttpClient CreateClient()
+    /// <summary>
+    /// Клиент для подписок. Панели отдают обычный список ссылок VPN-клиентам, а браузеру — страницу.
+    /// <paramref name="sendHwid"/> — сообщать идентификатор устройства (x-hwid и т. п.): по нему панели вроде
+    /// Remnawave считают лимит устройств и без него могут не отдать подписку.
+    /// </summary>
+    public static HttpClient CreateClient(bool sendHwid = true)
     {
         var http = new HttpClient(new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All, MaxAutomaticRedirections = 5 })
         {
@@ -105,6 +144,12 @@ public static partial class SubscriptionClient
         };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("v2rayN/7.10");
         http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue($"({Product.Id})"));
+        http.DefaultRequestHeaders.AcceptLanguage.ParseAdd(CultureInfo.CurrentUICulture.Name is { Length: > 0 } lang ? lang : "ru-RU");
+        if (sendHwid)
+        {
+            foreach (var (name, value) in DeviceInfo.Headers())
+                http.DefaultRequestHeaders.TryAddWithoutValidation(name, value);
+        }
         return http;
     }
 
@@ -151,8 +196,12 @@ public static partial class SubscriptionClient
         if (body.TrimStart().StartsWith('<'))
             throw new SubscriptionException("По ссылке открылась веб-страница, а не список серверов. Скопируйте в панели именно ссылку подписки.");
         var info = ParseUserInfo(header("subscription-userinfo"));
-        var interval = int.TryParse(header("profile-update-interval")?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var h) && h is >= 1 and <= 168 ? h : (int?)null;
-        var title = DecodeTitle(header("profile-title"));
+        // Строки «#имя: значение» в теле — запасной путь, заголовки главнее.
+        var bodyMeta = BodyMeta(body);
+        string? Value(string name) => header(name) ?? bodyMeta.GetValueOrDefault(name);
+        var interval = int.TryParse(Value("profile-update-interval")?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var h) && h is >= 1 and <= 168 ? h : (int?)null;
+        var title = DecodeTitle(Value("profile-title") ?? header("subscription-name"));
+        var meta = ParseMeta(Value, bodyMeta.GetValueOrDefault("routing"));
 
         if (Config.ServerConfigs.LooksLikeConfigs(body))
         {
@@ -170,7 +219,7 @@ public static partial class SubscriptionClient
                     ? $"Ни один конфиг из подписки не подошёл: {configs.Errors[0].Message}"
                     : "В подписке не нашлось серверов");
             return new SubscriptionFetch(new ImportResult(configs.Profiles, configs.Errors), 0, title, interval,
-                info.Upload, info.Download, info.Total, info.Expire) { Notes = configs.Notes };
+                info.Upload, info.Download, info.Total, info.Expire) { Notes = configs.Notes, Meta = meta };
         }
 
         // Обычно подписка — base64 от списка ссылок, реже — сам список.
@@ -184,8 +233,69 @@ public static partial class SubscriptionClient
                 : "В подписке не нашлось ссылок на серверы");
         }
 
-        return new SubscriptionFetch(result, unsupported, title, interval, info.Upload, info.Download, info.Total, info.Expire);
+        return new SubscriptionFetch(result, unsupported, title, interval, info.Upload, info.Download, info.Total, info.Expire) { Meta = meta };
     }
+
+    private static SubscriptionMeta ParseMeta(Func<string, string?> value, string? bodyRouting)
+    {
+        string? Text(string name, int max)
+        {
+            var s = DecodeText(value(name));
+            return s == null ? null : s.Length > max ? s[..max] : s;
+        }
+        static string? Link(string? s) =>
+            Uri.TryCreate(s?.Trim(), UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp || u.Scheme == "tg" || u.Scheme == "mailto")
+                ? u.AbsoluteUri : null;
+        var newUrl = value("new-url")?.Trim();
+        var newDomain = value("new-domain")?.Trim();
+        var sort = value("sort-order")?.Trim().ToLowerInvariant();
+        return new SubscriptionMeta
+        {
+            Description = Text("profile-description", 300),
+            Announce = Text("announce", 200),
+            AnnounceUrl = Link(value("announce-url")),
+            SupportUrl = Link(value("support-url")) ?? (value("support-email")?.Trim() is { Length: > 3 } mail && mail.Contains('@') ? "mailto:" + mail : null),
+            WebPageUrl = Link(value("profile-web-page-url") ?? value("homepage")),
+            HideUrl = value("hide-url")?.Trim().ToLowerInvariant() is "1" or "true",
+            SortOrder = sort is "ping" or "name" or "none" ? sort : null,
+            Routing = Routing.RoutingProfiles.TryParse(value("routing")) ?? Routing.RoutingProfiles.TryParse(bodyRouting),
+            NewUrl = Uri.TryCreate(newUrl, UriKind.Absolute, out var nu) && nu.Scheme == Uri.UriSchemeHttps ? nu.AbsoluteUri : null,
+            NewDomain = newDomain is { Length: > 0 } && Uri.CheckHostName(newDomain) == UriHostNameType.Dns ? newDomain.ToLowerInvariant() : null,
+        };
+    }
+
+    /// <summary>
+    /// Служебные строки в теле подписки (в том числе внутри base64): «#announce: текст», «#support-url: …» и
+    /// ссылка на профиль маршрутизации «схема://routing/onadd/…». В список серверов они не попадают.
+    /// </summary>
+    internal static Dictionary<string, string> BodyMeta(string body)
+    {
+        var text = !body.Contains("://", StringComparison.Ordinal) && !body.TrimStart().StartsWith('#') && LinkParser.TryDecodeBase64(body.Trim(), out var d) ? d : body;
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            var m = MetaLineRegex().Match(line.Trim());
+            if (m.Success)
+                result.TryAdd(m.Groups[1].Value, m.Groups[2].Value.Trim());
+            else if (line.Contains("://routing/onadd/", StringComparison.OrdinalIgnoreCase) || line.Contains("://routing/add/", StringComparison.OrdinalIgnoreCase))
+                result.TryAdd("routing", line.Trim());
+        }
+        return result;
+    }
+
+    /// <summary>Текст заголовка: обычный или «base64:…».</summary>
+    internal static string? DecodeText(string? value)
+    {
+        var s = value?.Trim();
+        if (string.IsNullOrEmpty(s))
+            return null;
+        if (s.StartsWith("base64:", StringComparison.OrdinalIgnoreCase))
+            s = LinkParser.TryDecodeBase64(s[7..], out var decoded) ? decoded.Trim() : null;
+        return string.IsNullOrEmpty(s) ? null : s;
+    }
+
+    [GeneratedRegex(@"^#\s*(announce|announce-url|profile-title|support-url|profile-web-page-url|profile-update-interval|hide-url)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex MetaLineRegex();
 
     /// <summary>«upload=1; download=2; total=3; expire=1700000000» (expire=0 или нет — бессрочно).</summary>
     public static (long Upload, long Download, long Total, DateTimeOffset? Expire) ParseUserInfo(string? value)
@@ -202,6 +312,8 @@ public static partial class SubscriptionClient
                 case "upload": upload = (long)n; break;
                 case "download": download = (long)n; break;
                 case "total": total = (long)n; break;
+                // Некоторые панели пишут срок в миллисекундах.
+                case "expire" when n > 32_000_000_000 && n / 1000 < 253402300800: expire = DateTimeOffset.FromUnixTimeSeconds((long)(n / 1000)); break;
                 case "expire" when n is > 0 and < 253402300800: expire = DateTimeOffset.FromUnixTimeSeconds((long)n); break;
             }
         }
@@ -272,6 +384,16 @@ public static class SubscriptionMerge
             Total = fetch.Total,
             Expire = fetch.Expire,
             Notes = fetch.Notes,
+            Description = fetch.Meta.Description,
+            Announce = fetch.Meta.Announce,
+            AnnounceUrl = fetch.Meta.AnnounceUrl,
+            SupportUrl = fetch.Meta.SupportUrl,
+            WebPageUrl = fetch.Meta.WebPageUrl,
+            HideUrl = fetch.Meta.HideUrl,
+            SortOrder = fetch.Meta.SortOrder,
+            Routing = fetch.Meta.Routing,
+            // Панель переехала — дальше ходим по новому адресу (только https).
+            Url = fetch.Meta.NewUrl ?? (fetch.Meta.NewDomain is { } domain ? new UriBuilder(subscription.Url) { Host = domain }.Uri.AbsoluteUri : subscription.Url),
         };
         data.SetSubscription(updatedSub);
         var removed = old.Count(o => fresh.All(f => f.Id != o.Id));

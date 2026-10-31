@@ -113,6 +113,7 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
                 SplitTunnel = ValidateSplit(options.SplitTunnel),
                 Bypass = BypassRules.Validate(options.Bypass ?? BypassOptions.Default),
                 Dns = DnsRules.Validate(options.Dns ?? new DnsOptions()),
+                Routing = options.Routing is { } routing ? RoutingProfiles.Validate(routing) : null,
             };
         }
         catch (ConfigException e)

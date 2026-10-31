@@ -100,6 +100,9 @@ public sealed record ConnectOptions
 
     /// <summary>У серверов с конфигом из подписки — их маршруты и DNS (false — всё через сервер).</summary>
     public bool UseServerRouting { get; set; } = true;
+
+    /// <summary>Профиль маршрутизации для серверов по ссылкам; null — всё через VPN. Служба проверяет его сама.</summary>
+    public RoutingProfile? Routing { get; set; }
 }
 
 public sealed record IpcRequest

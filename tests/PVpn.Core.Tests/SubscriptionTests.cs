@@ -168,4 +168,69 @@ public class SubscriptionTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void ReadsPanelMetaFromHeadersAndBody()
+    {
+        var routing = Convert.ToBase64String(Encoding.UTF8.GetBytes("""{"Name":"RU","DirectSites":["geosite:category-ru"],"DirectIp":["geoip:ru"]}"""));
+        var headers = new Dictionary<string, string>
+        {
+            ["announce"] = "base64:" + Convert.ToBase64String(Encoding.UTF8.GetBytes("Плановые работы в 3:00")),
+            ["support-url"] = "https://t.me/support_bot",
+            ["profile-description"] = "Лучший чай",
+            ["sort-order"] = "ping",
+            ["hide-url"] = "1",
+            ["routing"] = "anyapp://routing/onadd/" + routing,
+            ["new-url"] = "https://panel2.example/sub/abc",
+            ["subscription-userinfo"] = "upload=1; download=2; total=3; expire=1767225600000",
+        };
+        var body = string.Join("\n", "#announce: из тела (заголовок главнее)", "#profile-web-page-url: https://tea.example", LinkParserTests.Hy2Link);
+        var f = SubscriptionClient.Parse(body, h => headers.GetValueOrDefault(h));
+        Assert.Equal("Плановые работы в 3:00", f.Meta.Announce);
+        Assert.Equal("https://tea.example/", f.Meta.WebPageUrl);
+        Assert.Equal("https://t.me/support_bot", f.Meta.SupportUrl);
+        Assert.Equal(("Лучший чай", "ping", true), (f.Meta.Description, f.Meta.SortOrder, f.Meta.HideUrl));
+        Assert.Equal(["geosite:category-ru"], f.Meta.Routing!.DirectSites);
+        // Срок в миллисекундах.
+        Assert.Equal(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), f.Expire);
+        Assert.Single(f.Result.Profiles);
+
+        var data = new ProfileData();
+        var sub = data.Apply(new Subscription { Name = "p", Url = "https://panel.example/sub/abc" }, f, DateTimeOffset.Now).Subscription;
+        Assert.Equal("https://panel2.example/sub/abc", sub.Url);
+        Assert.Equal("Плановые работы в 3:00", sub.Announce);
+        Assert.NotNull(sub.Routing);
+    }
+
+    [Fact]
+    public void RoutingLineInBase64BodyIsMetaNotServer()
+    {
+        var routing = Convert.ToBase64String(Encoding.UTF8.GetBytes("""{"BlockSites":["geosite:category-ads-all"]}"""));
+        var body = Convert.ToBase64String(Encoding.UTF8.GetBytes(string.Join("\n", "anyapp://routing/onadd/" + routing, LinkParserTests.XhttpLink)));
+        var f = SubscriptionClient.Parse(body, _ => null);
+        Assert.Equal(["geosite:category-ads-all"], f.Meta.Routing!.BlockSites);
+        Assert.Single(f.Result.Profiles);
+        Assert.Empty(f.Result.Errors);
+    }
+
+    [Fact]
+    public void NewUrlMustBeHttpsAndNewDomainKeepsPath()
+    {
+        Assert.Null(SubscriptionClient.Parse(LinkParserTests.Hy2Link, h => h == "new-url" ? "http://evil.example/x" : null).Meta.NewUrl);
+        var f = SubscriptionClient.Parse(LinkParserTests.Hy2Link, h => h == "new-domain" ? "panel3.example" : null);
+        var data = new ProfileData();
+        var sub = data.Apply(new Subscription { Name = "p", Url = "https://panel.example:2096/sub/abc?x=1" }, f, DateTimeOffset.Now).Subscription;
+        Assert.Equal("https://panel3.example:2096/sub/abc?x=1", sub.Url);
+    }
+
+    [Fact]
+    public void SendsStableHwid()
+    {
+        Assert.Matches("^[0-9a-f]{32}$", DeviceInfo.Hwid);
+        Assert.Equal(DeviceInfo.Hwid, DeviceInfo.Hwid);
+        using var http = SubscriptionClient.CreateClient();
+        Assert.True(http.DefaultRequestHeaders.TryGetValues("x-hwid", out var v) && v.Single() == DeviceInfo.Hwid);
+        using var quiet = SubscriptionClient.CreateClient(sendHwid: false);
+        Assert.False(quiet.DefaultRequestHeaders.Contains("x-hwid"));
+    }
 }
