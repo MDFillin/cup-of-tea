@@ -6,24 +6,30 @@
     <FontFamily x:Key="Body">Segoe UI Variable Text, Segoe UI</FontFamily>
 
     <Color x:Key="AccentColor">#34D399</Color>
-    <SolidColorBrush x:Key="Bg" Color="#0D0F14" />
-    <SolidColorBrush x:Key="Side" Color="#12151C" />
-    <SolidColorBrush x:Key="Surface" Color="#171B23" />
-    <SolidColorBrush x:Key="Surface2" Color="#1F2430" />
-    <SolidColorBrush x:Key="Surface3" Color="#272D3A" />
-    <SolidColorBrush x:Key="Line" Color="#232937" />
-    <SolidColorBrush x:Key="Text1" Color="#F1F3F8" />
-    <SolidColorBrush x:Key="Text2" Color="#9AA2B3" />
-    <SolidColorBrush x:Key="Text3" Color="#666E80" />
+    <SolidColorBrush x:Key="Bg" Color="#090B0A" />
+    <SolidColorBrush x:Key="Side" Color="#0D100E" />
+    <SolidColorBrush x:Key="Surface" Color="#131715" />
+    <SolidColorBrush x:Key="Surface2" Color="#1A1F1C" />
+    <SolidColorBrush x:Key="Surface3" Color="#222925" />
+    <SolidColorBrush x:Key="Line" Color="#1F2622" />
+    <SolidColorBrush x:Key="Text1" Color="#F2F5F3" />
+    <SolidColorBrush x:Key="Text2" Color="#9BA59F" />
+    <SolidColorBrush x:Key="Text3" Color="#626B66" />
     <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}" />
     <SolidColorBrush x:Key="Up" Color="#7AA7FF" />
-    <SolidColorBrush x:Key="OnAccent" Color="#0B0D12" />
+    <SolidColorBrush x:Key="OnAccent" Color="#08100B" />
+    <!-- Фирменный переход: зелёный → салатовый -->
+    <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#34D399" Offset="0" />
+        <GradientStop Color="#A3E635" Offset="1" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="Heart" Color="#F43F5E" />
 
     <!-- ───── Текст ───── -->
     <Style x:Key="H1" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource Display}" />
-        <Setter Property="FontSize" Value="28" />
-        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="FontWeight" Value="Bold" />
         <Setter Property="Foreground" Value="{StaticResource Text1}" />
     </Style>
     <Style x:Key="Title" TargetType="TextBlock">
@@ -229,12 +235,13 @@
 
     <!-- ───── Кнопка питания: заливка и свечение по состоянию ───── -->
     <LinearGradientBrush x:Key="HeroOff" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#2C3344" Offset="0" />
-        <GradientStop Color="#1F2430" Offset="1" />
+        <GradientStop Color="#27302B" Offset="0" />
+        <GradientStop Color="#181D1A" Offset="1" />
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="HeroOn" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#4BE3A9" Offset="0" />
-        <GradientStop Color="#1FA774" Offset="1" />
+        <GradientStop Color="#A3E635" Offset="0" />
+        <GradientStop Color="#22C55E" Offset="0.55" />
+        <GradientStop Color="#0E9F6E" Offset="1" />
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="HeroBusy" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Color="#F8C76A" Offset="0" />
@@ -245,7 +252,7 @@
         <GradientStop Color="#D94848" Offset="1" />
     </LinearGradientBrush>
     <DropShadowEffect x:Key="HeroOffGlow" Color="#000000" BlurRadius="60" ShadowDepth="0" Opacity="0.4" />
-    <DropShadowEffect x:Key="HeroOnGlow" Color="#34D399" BlurRadius="60" ShadowDepth="0" Opacity="0.55" />
+    <DropShadowEffect x:Key="HeroOnGlow" Color="#4ADE80" BlurRadius="70" ShadowDepth="0" Opacity="0.6" />
     <DropShadowEffect x:Key="HeroBusyGlow" Color="#F5B544" BlurRadius="60" ShadowDepth="0" Opacity="0.45" />
     <DropShadowEffect x:Key="HeroErrorGlow" Color="#F87171" BlurRadius="60" ShadowDepth="0" Opacity="0.45" />
 

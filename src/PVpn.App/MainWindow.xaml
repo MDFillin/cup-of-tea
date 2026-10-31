@@ -31,10 +31,8 @@
                 <Border Background="{StaticResource Side}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="26,22,0,26">
-                            <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource Accent}">
-                                <ui:SymbolIcon Symbol="Flash24" Filled="True" FontSize="20" Foreground="{StaticResource OnAccent}" />
-                            </Border>
-                            <TextBlock Text="{x:Static local:Brand.Name}" FontFamily="{StaticResource Display}" FontSize="21" FontWeight="SemiBold" Margin="12,0,0,0" VerticalAlignment="Center" />
+                            <Image Source="Assets/logo.png" Width="36" Height="36" RenderOptions.BitmapScalingMode="HighQuality" />
+                            <TextBlock Text="{x:Static local:Brand.Name}" FontFamily="{StaticResource Display}" FontSize="20" FontWeight="Bold" Margin="12,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
 
                         <!-- Состояние видно с любой страницы -->
@@ -53,6 +51,10 @@
                             </Border>
                             <TextBlock FontSize="12" Foreground="{StaticResource Text3}" Margin="4,10,0,0">
                                 <Run Text="{x:Static local:Brand.Name}" /> <Run Text="{Binding AppVersion, Mode=OneWay}" /><Run Text=" · служба" /> <Run Text="{Binding ServiceVersion, Mode=OneWay}" />
+                            </TextBlock>
+                            <!-- Авторство: красное сердце текстом — цветные эмодзи WPF не рисует -->
+                            <TextBlock FontSize="11" Foreground="{StaticResource Text3}" Margin="4,4,0,0" TextWrapping="NoWrap">
+                                <Run Text="All rights reserved by @kpenkuu4au" /><Run Text=" ♥" Foreground="{StaticResource Heart}" />
                             </TextBlock>
                         </StackPanel>
 
@@ -139,7 +141,7 @@
                                     <TextBlock Text="{Binding StateLabel}" FontWeight="SemiBold" Foreground="{Binding StateBrush}" Margin="8,0,0,0" />
                                 </StackPanel>
                             </Grid>
-                            <TextBlock Text="{Binding BigStatus}" FontFamily="{StaticResource Display}" FontSize="44" FontWeight="Light" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding BigStatus}" FontFamily="{StaticResource Display}" FontSize="42" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,6,0,0" />
                             <TextBlock Text="{Binding StatusDetail}" Foreground="{StaticResource Text2}" HorizontalAlignment="Center" TextAlignment="Center"
                                        TextWrapping="Wrap" MaxWidth="560"
                                        Visibility="{Binding StatusDetail, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
@@ -160,8 +162,8 @@
                                             <DataTrigger Binding="{Binding State}" Value="On">
                                                 <Setter TargetName="Disc" Property="Fill" Value="{StaticResource HeroOn}" />
                                                 <Setter TargetName="Disc" Property="Effect" Value="{StaticResource HeroOnGlow}" />
-                                                <Setter TargetName="Ring1" Property="Stroke" Value="#3334D399" />
-                                                <Setter TargetName="Ring2" Property="Stroke" Value="#5534D399" />
+                                                <Setter TargetName="Ring1" Property="Stroke" Value="#334ADE80" />
+                                                <Setter TargetName="Ring2" Property="Stroke" Value="#77A3E635" />
                                                 <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource OnAccent}" />
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding State}" Value="Busy">
