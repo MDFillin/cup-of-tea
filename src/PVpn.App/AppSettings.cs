@@ -66,6 +66,24 @@ public sealed class AppSettings
 
     /// <summary>DNS в режиме TUN.</summary>
     public DnsOptions Dns { get; set; } = new();
+
+    /// <summary>Профиль маршрутизации: off, имя готового, sub:&lt;id подписки&gt; или custom.</summary>
+    public string RoutingChoice { get; set; } = "off";
+
+    /// <summary>Пользователь сам выбирал профиль — профиль от подписки не включается сам.</summary>
+    public bool RoutingChosenByUser { get; set; }
+
+    /// <summary>Свой профиль, импортированный из буфера или ссылкой.</summary>
+    public PVpn.Core.Routing.RoutingProfile? CustomRouting { get; set; }
+
+    /// <summary>Сортировка серверов: none, ping, name.</summary>
+    public string ServerSort { get; set; } = "none";
+
+    /// <summary>Пинг серверов при запуске и после обновления подписки.</summary>
+    public bool AutoPing { get; set; } = true;
+
+    /// <summary>Сообщать панели подписки идентификатор устройства (x-hwid) — для лимита устройств.</summary>
+    public bool SendHwid { get; set; } = true;
     public SplitTunnelSettings SplitTunnel { get; set; } = new();
 
     public static AppSettings Load()

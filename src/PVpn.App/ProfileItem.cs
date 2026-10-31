@@ -6,7 +6,7 @@ using PVpn.Core.Profiles;
 namespace PVpn.App;
 
 /// <summary>Сервер в списке: профиль и результат последней проверки задержки.</summary>
-public sealed partial class ProfileItem(Profile profile, string? subscription = null) : ObservableObject
+public sealed partial class ProfileItem(Profile profile, string? subscription = null, int order = 0) : ObservableObject
 {
     public Profile Profile { get; } = profile;
 
@@ -36,8 +36,14 @@ public sealed partial class ProfileItem(Profile profile, string? subscription = 
         _ => "VL",
     };
 
+    /// <summary>Место в списке, как пришло из подписки (сортировка «как в подписке»).</summary>
+    public int Order { get; } = order;
+
+    /// <summary>Для сортировки по пингу: без ответа и непроверенные — в конце.</summary>
+    public int SortDelay => Delay is { Milliseconds: { } ms } ? ms : Delay == null ? int.MaxValue : int.MaxValue - 1;
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DelayText), nameof(DelayBrush))]
+    [NotifyPropertyChangedFor(nameof(DelayText), nameof(DelayBrush), nameof(SortDelay))]
     private DelayResult? delay;
 
     [ObservableProperty]

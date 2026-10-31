@@ -33,6 +33,11 @@ public sealed class SubscriptionItem(Subscription subscription, int servers)
 
     public string? Error => Subscription.LastError is { } e ? $"Не удалось обновить: {e}" : null;
 
+    public string? Description => Subscription.Description;
+    public string? SupportUrl => Subscription.SupportUrl;
+    public string? WebPageUrl => Subscription.WebPageUrl;
+    public bool HasLinks => SupportUrl != null || WebPageUrl != null;
+
     /// <summary>Служебные строки панели: «Использовано 3.43/60 ГБ, доступно 56.57 ГБ» и т. п.</summary>
     public string? Notes => Subscription.Notes.Count > 0 ? string.Join(Environment.NewLine, Subscription.Notes) : null;
 
@@ -60,6 +65,7 @@ public sealed partial class MainViewModel
         Subscriptions.Clear();
         foreach (var s in data.Subscriptions)
             Subscriptions.Add(new SubscriptionItem(s, data.Profiles.Count(p => p.SubscriptionId == s.Id)));
+        RefreshRoutingChoices();
     }
 
     private bool CanAddSubscription() => !SubscriptionBusy && !string.IsNullOrWhiteSpace(SubscriptionUrl);
@@ -72,12 +78,13 @@ public sealed partial class MainViewModel
         SubscriptionBusy = true;
         try
         {
-            using var http = SubscriptionClient.CreateClient();
+            using var http = SubscriptionClient.CreateClient(settings.SendHwid);
             var update = await SubscriptionService.AddAsync(data, http, url, null);
             if (TrySaveProfiles())
             {
                 SubscriptionUrl = "";
                 Notice = "Подписка добавлена. " + update;
+                PingIfEnabled();
             }
         }
         catch (SubscriptionException e)
@@ -132,7 +139,7 @@ public sealed partial class MainViewModel
         var messages = new List<string>();
         try
         {
-            using var http = SubscriptionClient.CreateClient();
+            using var http = SubscriptionClient.CreateClient(settings.SendHwid);
             foreach (var s in subscriptions)
             {
                 // Подписку могли удалить, пока шло обновление другой.
@@ -160,5 +167,6 @@ public sealed partial class MainViewModel
         }
         if (!quiet)
             Notice = string.Join(" ", messages);
+        PingIfEnabled();
     }
 }

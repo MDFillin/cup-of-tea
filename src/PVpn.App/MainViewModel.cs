@@ -229,6 +229,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         Notifications = settings.Notifications;
         HotkeyText = settings.Hotkey;
         StartWithWindows = MigrateAutostart() || Registry.CurrentUser.OpenSubKey(AutostartKey)?.GetValue(Product.Id) != null;
+        LoadRoutingSettings();
         loadingSettings = false;
 
         // Прошлый запуск интерфейса упал в режиме прокси: вернуть системный прокси как было.
@@ -243,6 +244,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         timer.Start();
         StartNetworkWatch();
         _ = Cores.LoadAsync();
+        PingIfEnabled();
     }
 
     // ───────────── Серверы ─────────────
@@ -260,8 +262,11 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
         var selectedId = SelectedProfile?.Profile.Id ?? data.SelectedId;
         Profiles.Clear();
-        foreach (var p in data.Profiles)
-            Profiles.Add(new ProfileItem(p, data.Subscriptions.FirstOrDefault(s => s.Id == p.SubscriptionId)?.Name));
+        for (var i = 0; i < data.Profiles.Count; i++)
+        {
+            var p = data.Profiles[i];
+            Profiles.Add(new ProfileItem(p, data.Subscriptions.FirstOrDefault(s => s.Id == p.SubscriptionId)?.Name, i));
+        }
         SelectedProfile = Profiles.FirstOrDefault(p => p.Profile.Id == selectedId) ?? Profiles.FirstOrDefault();
         LoadSubscriptions();
     }
@@ -302,6 +307,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private void OnSelectedProfileChangedCore(ProfileItem? value)
     {
         OnPropertyChanged(nameof(CurrentServer));
+        UpdateAnnounce();
         if (value == null || data.SelectedId == value.Profile.Id)
             return;
         data.SelectedId = value.Profile.Id;
@@ -631,6 +637,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 Options = new ConnectOptions
                 {
                     UseServerRouting = UseServerRouting,
+                    Routing = EffectiveRouting(),
                     KillSwitch = KillSwitch,
                     BlockQuic = BlockQuic,
                     Bypass = bypass,
@@ -675,6 +682,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 Bypass = bypass,
                 SplitTunnel = Split.ToOptions(),
                 UseServerRouting = UseServerRouting,
+                Routing = EffectiveRouting(),
             }, (source, line) => Application.Current?.Dispatcher.BeginInvoke(() => AppendLog(source, line)));
             proxy = session;
             proxySince = DateTimeOffset.Now;

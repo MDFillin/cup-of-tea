@@ -132,6 +132,21 @@
                             </Ellipse.Style>
                         </Ellipse>
 
+                        <!-- Объявление панели подписки (announce) -->
+                        <Border Grid.Row="0" Grid.RowSpan="2" VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="640" Margin="40,48,40,0"
+                                Style="{StaticResource Card}" Padding="16,10" BorderBrush="{StaticResource AccentGradient}" BorderThickness="1"
+                                Visibility="{Binding AnnounceText, Converter={x:Static local:EmptyToCollapsed.Instance}}">
+                            <DockPanel>
+                                <ui:Button DockPanel.Dock="Right" Icon="{ui:SymbolIcon Dismiss24}" Appearance="Transparent" Padding="6" VerticalAlignment="Top"
+                                           ToolTip="Скрыть" AutomationProperties.Name="Скрыть объявление" Command="{Binding DismissAnnounceCommand}" />
+                                <ui:Button DockPanel.Dock="Right" Content="Подробнее" Appearance="Transparent" Margin="8,0,4,0" VerticalAlignment="Center"
+                                           Command="{Binding OpenLinkCommand}" CommandParameter="{Binding AnnounceUrl}"
+                                           Visibility="{Binding AnnounceUrl, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                                <ui:SymbolIcon Symbol="Megaphone24" FontSize="20" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="{Binding AnnounceText}" TextWrapping="Wrap" VerticalAlignment="Center" MaxHeight="100" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                        </Border>
+
                         <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40,0">
                             <!-- Плашка состояния -->
                             <Grid HorizontalAlignment="Center">
@@ -381,8 +396,12 @@
                                 <ui:Button Icon="{ui:SymbolIcon Delete24}" Margin="8,0,0,0" Command="{Binding DeleteProfileCommand}" AutomationProperties.Name="Удалить сервер" ToolTip="Удалить сервер" />
                             </StackPanel>
                         </Grid>
-                        <ui:TextBox DockPanel.Dock="Top" Margin="0,0,0,10" PlaceholderText="Поиск по имени или адресу" Icon="{ui:SymbolIcon Search24}"
-                                    Text="{Binding ServerFilter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Поиск сервера" />
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <ComboBox DockPanel.Dock="Right" MinWidth="170" Margin="8,0,0,0" AutomationProperties.Name="Сортировка серверов"
+                                      ItemsSource="{Binding SortChoices}" DisplayMemberPath="Title" SelectedValuePath="Key" SelectedValue="{Binding ServerSort}" />
+                            <ui:TextBox PlaceholderText="Поиск по имени или адресу" Icon="{ui:SymbolIcon Search24}"
+                                        Text="{Binding ServerFilter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Поиск сервера" />
+                        </DockPanel>
 
                         <Border Style="{StaticResource Card}" Padding="6">
                             <Grid>
@@ -488,6 +507,20 @@
                                     <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" AutomationProperties.Name="Маршруты из подписки"
                                                      IsChecked="{Binding DataContext.UseServerRouting, RelativeSource={RelativeSource AncestorType=Window}}" />
                                 </Grid>
+                            </Border>
+                            <Border Style="{StaticResource Card}" Padding="20,12" Margin="0,12,0,0">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <ui:Button DockPanel.Dock="Right" Content="Из буфера" Icon="{ui:SymbolIcon ClipboardPaste24}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   ToolTip="Профиль маршрутизации из буфера обмена: JSON, base64 или ссылка …://routing/onadd/…"
+                                                   Command="{Binding DataContext.ImportRoutingCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                        <ComboBox DockPanel.Dock="Right" MinWidth="300" VerticalAlignment="Center" AutomationProperties.Name="Профиль маршрутизации"
+                                                  ItemsSource="{Binding DataContext.RoutingChoices, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Title" SelectedValuePath="Key"
+                                                  SelectedValue="{Binding DataContext.RoutingChoice, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                        <TextBlock Text="Профиль маршрутизации" FontFamily="{StaticResource Display}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBlock Style="{StaticResource Sub}" Margin="0,6,0,0" Text="{Binding DataContext.RoutingSummary, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                </StackPanel>
                             </Border>
                         </StackPanel>
 
@@ -1034,6 +1067,10 @@
                                         <ui:Button DockPanel.Dock="Right" Content="Добавить" Icon="{ui:SymbolIcon Add24}" Appearance="Primary" Margin="8,0,0,0" Command="{Binding AddSubscriptionCommand}" />
                                         <ui:TextBox x:Name="SubscriptionBox" Text="{Binding SubscriptionUrl, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Ссылка подписки https://…" />
                                     </DockPanel>
+                                    <ui:ToggleSwitch Content="Пинг серверов при запуске и после обновления подписки" IsChecked="{Binding AutoPing}" Margin="0,14,0,0" />
+                                    <ui:ToggleSwitch Content="Сообщать панели идентификатор устройства (HWID)" IsChecked="{Binding SendHwid}" Margin="0,10,0,0" />
+                                    <TextBlock Style="{StaticResource Hint}" Margin="48,2,0,0"
+                                               Text="По нему панели вроде Remnawave считают лимит устройств; без него такая подписка может не обновиться. Это хэш, а не серийный номер ПК." />
                                     <ItemsControl ItemsSource="{Binding Subscriptions}" Margin="0,12,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -1047,7 +1084,17 @@
                                                         </StackPanel>
                                                         <StackPanel>
                                                             <TextBlock local:FlagText.Text="{Binding Name}" Style="{StaticResource Title}" FontWeight="SemiBold" />
+                                                            <TextBlock Text="{Binding Description}" Style="{StaticResource Sub}"
+                                                                       Visibility="{Binding Description, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
                                                             <TextBlock Text="{Binding Details}" Style="{StaticResource Sub}" />
+                                                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasLinks, Converter={StaticResource BoolToVisibility}}">
+                                                                <ui:Button Content="Поддержка" Icon="{ui:SymbolIcon ChatHelp24}" Padding="10,4" Margin="0,0,6,0"
+                                                                           Command="{Binding DataContext.OpenLinkCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding SupportUrl}"
+                                                                           Visibility="{Binding SupportUrl, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                                                                <ui:Button Content="Сайт" Icon="{ui:SymbolIcon Globe24}" Padding="10,4"
+                                                                           Command="{Binding DataContext.OpenLinkCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding WebPageUrl}"
+                                                                           Visibility="{Binding WebPageUrl, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                                                            </StackPanel>
                                                             <TextBlock Text="{Binding Notes}" Style="{StaticResource Sub}" TextWrapping="Wrap" Margin="0,2,0,0"
                                                                        Visibility="{Binding Notes, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
                                                             <ProgressBar Value="{Binding UsedPercent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,6,12,0"
