@@ -132,4 +132,13 @@ public class DnsTests
         Assert.Null(DnsLeakTest.Evaluate(entries, null).Leak);
         Assert.Null(DnsLeakTest.Evaluate([entries[0]], DnsRules.OrgKeywords(DnsProvider.Cloudflare)).Leak);
     }
+
+    [Fact]
+    public void LeakTestIdRejectsHtmlPage()
+    {
+        Assert.Equal("625fd927f73cf6e7", DnsLeakTest.ParseId("625fd927f73cf6e7\n"));
+        Assert.Null(DnsLeakTest.ParseId("<!DOCTYPE HTML>\n<html lang=\"id\" class=\"fonts-loading\">"));
+        Assert.Null(DnsLeakTest.ParseId(""));
+        Assert.Null(DnsLeakTest.ParseId(new string('a', 65)));
+    }
 }

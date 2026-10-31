@@ -21,6 +21,12 @@ public static class DnsLeakTest
     private const int Probes = 10;
 
     /// <summary>
+    /// Откуда брать номер проверки, по порядку. С переводом сайта на языки (/ru/, /id/…) адрес /id стал
+    /// индонезийской страницей сайта (31.10.2026); /id.php отдаёт номер по-прежнему. /id — на случай, если починят.
+    /// </summary>
+    private static readonly string[] IdPaths = ["/id.php", "/id"];
+
+    /// <summary>
     /// Клиент для проверки: только IPv4 (туннель тоже только IPv4, а сломанный у провайдера IPv6 без перехода на
     /// IPv4, как у браузеров, вешал бы проверку на 20 с). <paramref name="proxy"/> — HTTP-вход режима прокси.
     /// </summary>
@@ -49,9 +55,7 @@ public static class DnsLeakTest
     /// <param name="expectedOrgs">Слова в названии сети «своих» DNS (см. <c>DnsRules.OrgKeywords</c>); null — не проверять.</param>
     public static async Task<DnsLeakResult> RunAsync(HttpClient http, IReadOnlyList<string>? expectedOrgs, CancellationToken ct = default)
     {
-        var id = (await http.GetStringAsync($"{Api}/id", ct).ConfigureAwait(false)).Trim();
-        if (id.Length is 0 or > 64 || !id.All(char.IsAsciiLetterOrDigit))
-            throw new InvalidOperationException("Сервис проверки DNS вернул неожиданный ответ");
+        var id = await GetIdAsync(http, ct).ConfigureAwait(false);
 
         // Ответ поддоменов не важен: важно, что их адрес кто-то разрешил.
         await Task.WhenAll(Enumerable.Range(1, Probes).Select(async i =>
@@ -69,6 +73,33 @@ public static class DnsLeakTest
 
         var json = await http.GetStringAsync($"{Api}/dnsleak/test/{id}?json", ct).ConfigureAwait(false);
         return Evaluate(JsonSerializer.Deserialize(json, DnsLeakJsonContext.Default.ListBashWsEntry) ?? [], expectedOrgs);
+    }
+
+    private static async Task<string> GetIdAsync(HttpClient http, CancellationToken ct)
+    {
+        string? error = null;
+        foreach (var path in IdPaths)
+        {
+            try
+            {
+                using var response = await http.GetAsync(Api + path, ct).ConfigureAwait(false);
+                if (response.IsSuccessStatusCode && ParseId(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false)) is { } id)
+                    return id;
+                error = $"{path}: HTTP {(int)response.StatusCode}, не номер проверки";
+            }
+            catch (HttpRequestException e)
+            {
+                error = $"{path}: {e.Message}";
+            }
+        }
+        throw new InvalidOperationException($"Сервис проверки DNS не выдал номер проверки ({error})");
+    }
+
+    /// <summary>Номер проверки — короткая строка из латиницы и цифр; всё остальное (например, страница сайта) — null.</summary>
+    internal static string? ParseId(string body)
+    {
+        var id = body.Trim();
+        return id.Length is 0 or > 64 || !id.All(char.IsAsciiLetterOrDigit) ? null : id;
     }
 
     internal static DnsLeakResult Evaluate(IReadOnlyList<BashWsEntry> entries, IReadOnlyList<string>? expectedOrgs)
