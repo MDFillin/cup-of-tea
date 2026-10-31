@@ -6,13 +6,21 @@ using PVpn.Core.Profiles;
 namespace PVpn.App;
 
 /// <summary>Сервер в списке: профиль и результат последней проверки задержки.</summary>
-public sealed partial class ProfileItem(Profile profile, string? subscription = null, int order = 0) : ObservableObject
+public sealed partial class ProfileItem(Profile profile, string? subscription = null, int order = 0, bool isAuto = false) : ObservableObject
 {
     public Profile Profile { get; } = profile;
 
+    /// <summary>Автовыбор из серверов группы по ссылкам (см. MainViewModel.Auto): всегда первый в группе.</summary>
+    public bool IsAuto { get; } = isAuto;
+
+    /// <summary>Для сортировки: автовыбор выше остальных серверов группы.</summary>
+    public int SortTop => IsAuto ? 0 : 1;
+
     /// <summary>Имя без флага-эмодзи: Windows рисует флаги буквами («NL»).</summary>
     public string Name => ProfileData.PlainName(Profile.Name) is { Length: > 0 } plain ? plain : Profile.Name;
-    public string Details => Profile is XrayConfigProfile { Description: { } d }
+    public string Details => IsAuto && Profile is XrayConfigProfile auto
+        ? $"Лучший по пингу из {auto.ServerCount} серверов группы"
+        : Profile is XrayConfigProfile { Description: { } d }
         ? $"{Profile.ProtocolLabel} · {Flags.Strip(d)}"
         : $"{Profile.ProtocolLabel} · {Profile.Host}:{Profile.Port}";
 

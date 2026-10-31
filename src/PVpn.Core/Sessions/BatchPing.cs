@@ -103,15 +103,6 @@ public static class BatchPing
     {
         if (profile is XrayConfigProfile server)
             return ServerConfigs.PingOutbounds(server, tag, bind);
-        bypass = BypassRules.Validate(bypass);
-        var fragment = bypass.Fragment && profile is StreamProfile { Security: "tls" or "reality" };
-        var main = XrayConfigBuilder.BuildOutbound(profile, tag, bind, null, fragment, bypass);
-        if (!fragment)
-            return [main];
-        // У каждого сервера свой выход фрагментации (у серверов разных подписок настройки могут отличаться).
-        main["streamSettings"]!["sockopt"]!["dialerProxy"] = tag + "-fragment";
-        var frag = XrayConfigBuilder.BuildFragmentOutbound(bind, bypass);
-        frag["tag"] = tag + "-fragment";
-        return [main, frag];
+        return AutoSelect.ServerOutbounds(profile, tag, tag + "-fragment", bind, bypass);
     }
 }

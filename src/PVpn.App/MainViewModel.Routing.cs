@@ -365,6 +365,7 @@ public sealed partial class MainViewModel
         {
             view.SortDescriptions.Clear();
             view.SortDescriptions.Add(new SortDescription(nameof(ProfileItem.Group), ListSortDirection.Ascending));
+            view.SortDescriptions.Add(new SortDescription(nameof(ProfileItem.SortTop), ListSortDirection.Ascending));
             switch (ServerSort)
             {
                 case "ping":

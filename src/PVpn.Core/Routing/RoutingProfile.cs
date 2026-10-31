@@ -191,7 +191,9 @@ public static partial class RoutingProfiles
     /// (служебных правил клиента — локальные сети, раздельное туннелирование), но перед «всё остальное».
     /// Прямой выход привязывается к физическому адаптеру — иначе в TUN он ушёл бы в тот же туннель.
     /// </summary>
-    internal static void Apply(JsonObject config, RoutingProfile profile, string proxyTag, string? bindInterface, int insertAt)
+    /// <param name="balancerTag">«Через VPN» — на балансировщик (автовыбор), а не на выход <paramref name="proxyTag"/>.</param>
+    internal static void Apply(JsonObject config, RoutingProfile profile, string proxyTag, string? bindInterface, int insertAt,
+        string? balancerTag = null)
     {
         var outbounds = (JsonArray)config["outbounds"]!;
         var direct = new JsonObject { ["tag"] = DirectTag, ["protocol"] = "freedom" };
@@ -211,8 +213,14 @@ public static partial class RoutingProfiles
         var added = new List<JsonObject>();
         void Add(string key, List<string> items, string outbound)
         {
-            if (items.Count > 0)
-                added.Add(new JsonObject { ["type"] = "field", [key] = XrayConfigBuilder.ToJsonArray(items), ["outboundTag"] = outbound });
+            if (items.Count == 0)
+                return;
+            var rule = new JsonObject { ["type"] = "field", [key] = XrayConfigBuilder.ToJsonArray(items) };
+            if (outbound == proxyTag && balancerTag != null)
+                rule["balancerTag"] = balancerTag;
+            else
+                rule["outboundTag"] = outbound;
+            added.Add(rule);
         }
         Add("domain", profile.BlockSites, BlockTag);
         Add("ip", profile.BlockIp, BlockTag);

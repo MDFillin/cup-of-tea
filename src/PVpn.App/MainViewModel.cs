@@ -271,6 +271,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             var p = data.Profiles[i];
             Profiles.Add(new ProfileItem(p, data.Subscriptions.FirstOrDefault(s => s.Id == p.SubscriptionId)?.Name, i));
         }
+        foreach (var auto in BuildAutoItems())
+            Profiles.Add(auto);
         SelectedProfile = Profiles.FirstOrDefault(p => p.Profile.Id == selectedId) ?? Profiles.FirstOrDefault();
         LoadSubscriptions();
     }
@@ -479,7 +481,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         Notice = sb.ToString();
     }
 
-    private bool CanDeleteProfile() => SelectedProfile != null;
+    private bool CanDeleteProfile() => SelectedProfile is { IsAuto: false };
 
     [RelayCommand(CanExecute = nameof(CanDeleteProfile))]
     private void DeleteProfile()
@@ -543,7 +545,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             var byId = items.ToDictionary(i => i.Profile.Id);
             try
             {
-                await BatchPing.MeasureAsync(items.Select(i => new PingTarget(i.Profile, BypassFor(i.Profile, settings.Bypass))).ToList(), cores,
+                // Автовыбор не пингуется сам: его задержка — лучшая из его серверов (ShowAutoDelays).
+                await BatchPing.MeasureAsync(items.Where(i => !i.IsAuto).Select(i => new PingTarget(i.Profile, BypassFor(i.Profile, settings.Bypass))).ToList(), cores,
                     (id, delay) => Application.Current?.Dispatcher.BeginInvoke(() =>
                     {
                         if (byId.TryGetValue(id, out var item))
@@ -558,12 +561,13 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             {
                 AppendLog("app", $"Пинг одним процессом не вышел ({e.Message.Split('\n')[0]}), проверяю по одному");
             }
-            await PingOneByOneAsync(items.Where(i => i.Checking).ToList(), cores);
+            await PingOneByOneAsync(items.Where(i => i.Checking && !i.IsAuto).ToList(), cores);
         }
         finally
         {
             foreach (var item in items)
                 item.Checking = false;
+            ShowAutoDelays();
             checkingDelays = false;
         }
     }
@@ -651,6 +655,9 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             Notice = "MTU в настройках должен быть числом от 1280 до 1500.";
             return;
         }
+        if (Materialize(profile) is not { } materialized)
+            return;
+        profile = materialized;
         if (ReadBypass(profile) is not { } bypass)
             return;
         DnsOptions dns;
@@ -701,6 +708,9 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (!restart)
             watchdog.Reset();
+        if (Materialize(profile) is not { } materialized)
+            return;
+        profile = materialized;
         if (ReadBypass(profile) is not { } bypass)
             return;
         CorePaths cores;

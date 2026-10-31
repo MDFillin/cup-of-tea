@@ -290,6 +290,8 @@ public static class ServerConfigs
     internal static JsonObject BuildRuntime(XrayConfigProfile profile, XrayOptions options)
     {
         var config = Sanitize(JsonNode.Parse(profile.Config) as JsonObject ?? throw new ConfigException("Конфиг сервера повреждён"));
+        // Автовыбор, собранный клиентом из серверов по ссылкам: маршрутов сервера в нём нет, действует свой профиль.
+        var auto = AutoSelect.IsClientAuto(config);
         foreach (var key in RuntimeDropped)
             config.Remove(key);
         config["log"] = new JsonObject { ["loglevel"] = options.LogLevel, ["access"] = "none", ["dnsLog"] = false };
@@ -315,8 +317,10 @@ public static class ServerConfigs
         var rules = routing["rules"] as JsonArray ?? new JsonArray();
         routing["rules"] = rules;
         config["routing"] = routing;
-        if (!options.UseServerRouting)
+        if (!options.UseServerRouting && !auto)
             StripServerRouting(rules);
+        if (auto && options.Routing is { } own)
+            RoutingProfiles.Apply(config, own, XrayConfigBuilder.ProxyTag, options.BindInterface, rules.Count - 1, AutoSelect.BalancerTag);
 
         var sniffing = new JsonObject
         {

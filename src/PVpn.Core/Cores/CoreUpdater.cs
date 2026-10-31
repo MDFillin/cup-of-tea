@@ -459,6 +459,19 @@ public static class CoreSelfTest
                 if (!r.Ok)
                     return $"конфиг сервера из подписки: {FirstLine(r.Output)}";
             }
+            // Автовыбор из серверов по ссылкам (балансировщик) со своим профилем маршрутизации.
+            var auto = ServerConfigs.ParseRuntime(AutoSelect.Build("self-auto", AutoSelect.IdFor(null), null,
+                Links.Select(l => (LinkParser.Parse(l), BypassRules.Validate(BypassOptions.Default))).ToList()).Config);
+            foreach (var options in new[]
+                     {
+                         new XrayOptions { Mode = XrayMode.TunBackend, SocksPort = 23456, SocksUser = "u", SocksPassword = "p4ssw0rd", BindInterface = "Ethernet", Routing = RoutingProfiles.RussiaDirectNoAds },
+                         new XrayOptions { SocksPort = 23458, HttpPort = 23459, SplitTunnel = split, UseServerRouting = false },
+                     })
+            {
+                var r = await CoreValidator.ValidateXrayAsync(paths, XrayConfigBuilder.Build(auto, options).ToJsonString(), ct).ConfigureAwait(false);
+                if (!r.Ok)
+                    return $"автовыбор: {FirstLine(r.Output)}";
+            }
             return null;
         }
 
