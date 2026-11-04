@@ -108,4 +108,18 @@ public class MiscTests
     [Fact]
     public void KillSwitchLanListParses() =>
         Assert.All(KillSwitch.DefaultLanCidrs, c => NetworkInfo.ParseCidr(c));
+
+    [Fact]
+    public void KillSwitchServerAddressesAreSingleIpv4Hosts()
+    {
+        var cidrs = KillSwitch.ServerCidrs(
+        [
+            IPAddress.Parse("203.0.113.10"), IPAddress.Parse("203.0.113.10"), IPAddress.Parse("203.0.113.20"),
+            IPAddress.None, IPAddress.Any, IPAddress.Loopback, IPAddress.Parse("2001:db8::1"),
+        ]);
+        Assert.Equal(["203.0.113.10/32", "203.0.113.20/32"], cidrs);
+        Assert.All(cidrs, c => NetworkInfo.ParseCidr(c));
+        // Пустой список — фильтра нет вовсе (фильтр WFP без условий пропускал бы всё).
+        Assert.Empty(KillSwitch.ServerCidrs([IPAddress.None]));
+    }
 }

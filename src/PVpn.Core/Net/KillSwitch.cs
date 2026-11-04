@@ -10,7 +10,8 @@ namespace PVpn.Core.Net;
 
 /// <summary>
 /// Kill switch на WFP. Пока он включён, наружу выходит только: трафик через TUN, сами ядра
-/// (xray — к серверу, sing-box — в локальную сеть), loopback, DHCP (и как клиент, и как сервер общего доступа) и локальные сети. DNS (порт 53) мимо TUN закрыт.
+/// (xray — к серверу, sing-box — в локальную сеть), loopback, DHCP (и как клиент, и как сервер общего доступа), локальные сети
+/// и адрес самого VPN-сервера (любым программам — например, панель управления на том же сервере). DNS (порт 53) мимо TUN закрыт.
 /// Сессия WFP не динамическая: фильтры переживают падение ядер и самой службы (пока служба перезапускается,
 /// утечки нет). Снимаются явно (<see cref="Disable"/>) или перезагрузкой — постоянными (persistent) не делаются.
 /// </summary>
@@ -33,6 +34,13 @@ public static unsafe class KillSwitch
 
     private static readonly string[] LanCidrs6 = ["fe80::/10", "ff00::/8", "fc00::/7"];
 
+    /// <summary>Адреса сервера для фильтра: только настоящие IPv4 (без 0.0.0.0, 255.255.255.255 и loopback), каждый — /32.</summary>
+    public static IReadOnlyList<string> ServerCidrs(IEnumerable<IPAddress> addresses) => addresses
+        .Where(a => a.AddressFamily == AddressFamily.InterNetwork && !a.Equals(IPAddress.Any) && !a.Equals(IPAddress.None) && !IPAddress.IsLoopback(a))
+        .Distinct()
+        .Select(a => $"{a}/32")
+        .ToList();
+
     private static Guid[] AllLayers =>
     [
         PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6,
@@ -45,8 +53,14 @@ public static unsafe class KillSwitch
     /// <param name="allowedApps">Полные пути к ядрам: им можно наружу мимо TUN.</param>
     /// <param name="lanCidrs">Локальные сети IPv4 (см. <see cref="DefaultLanCidrs"/>) и, например, 26.0.0.0/8 у Radmin.</param>
     /// <param name="tunnelLuid">LUID адаптера TUN; null — TUN ещё не поднят, наружу только ядра и локальная сеть.</param>
-    public static void Enable(IReadOnlyList<string> allowedApps, IReadOnlyList<string> lanCidrs, ulong? tunnelLuid)
+    /// <param name="serverAddresses">
+    /// IP текущего VPN-сервера: к ним можно любым программам. Маршрут к серверу и так идёт мимо туннеля (иначе петля),
+    /// а сам адрес сервер и провайдер уже знают — без этого не открывалась панель управления, стоящая на том же сервере.
+    /// </param>
+    public static void Enable(IReadOnlyList<string> allowedApps, IReadOnlyList<string> lanCidrs, ulong? tunnelLuid,
+        IReadOnlyList<IPAddress>? serverAddresses = null)
     {
+        var servers = ServerCidrs(serverAddresses ?? []);
         using var arena = new Arena();
         var appIds = new List<nint>();
         try
@@ -100,6 +114,11 @@ public static unsafe class KillSwitch
                 AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: локальная сеть", lan4);
                 AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V6, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: локальная сеть", lan6);
                 AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: локальная сеть", lan6);
+
+                // Фильтр без условий пропускал бы всё, поэтому без адресов сервера его нет вовсе.
+                if (servers.Count > 0)
+                    AddFilter(h, arena, PInvoke.FWPM_LAYER_ALE_AUTH_CONNECT_V4, WeightLan, FWP_ACTION_TYPE.FWP_ACTION_PERMIT, "The Cup of Tea: VPN-сервер",
+                        servers.Select(c.RemoteCidr).ToArray());
 
                 foreach (var layer in AllLayers)
                     AddFilter(h, arena, layer, WeightBlockAll, FWP_ACTION_TYPE.FWP_ACTION_BLOCK, "The Cup of Tea: всё остальное");

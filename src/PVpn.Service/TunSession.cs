@@ -190,7 +190,8 @@ internal sealed class TunSession
 
     /// <summary>
     /// Другой сервер при тех же настройках TUN: новый маршрут (если у сервера другой IP) и новый xray на прежнем
-    /// SOCKS-порту. sing-box и адаптер остаются, kill switch тоже (он пускает наружу ядра, а не адреса).
+    /// SOCKS-порту. sing-box и адаптер остаются; kill switch переставляется, только если у сервера другой IP
+    /// (к адресу сервера он пускает любые программы).
     /// </summary>
     public async Task SwitchAsync(Profile profile, ConnectOptions next, Action<string> progress, CancellationToken ct)
     {
@@ -209,6 +210,9 @@ internal sealed class TunSession
             RemoveRoute();
             ServerIp = ip;
             AddRoute();
+            // Одной транзакцией WFP: окна без защиты нет.
+            if (KillSwitchActive)
+                ApplyKillSwitch(killSwitchTunnel);
         }
         progress("Перезапускаю xray");
         await Xray.DisposeAsync().ConfigureAwait(false);
@@ -388,11 +392,15 @@ internal sealed class TunSession
         DnsCache.Flush();
     }
 
-    /// <param name="tunnelLuid">null — TUN ещё не поднят (наружу только ядра и локальная сеть).</param>
+    /// <summary>LUID адаптера TUN, с которым стоит kill switch (null — TUN ещё не поднят).</summary>
+    private ulong? killSwitchTunnel;
+
+    /// <param name="tunnelLuid">null — TUN ещё не поднят (наружу только ядра, локальная сеть и адрес сервера).</param>
     private void ApplyKillSwitch(ulong? tunnelLuid)
     {
         KillSwitch.Enable([cores.Xray, cores.SingBox], [.. KillSwitch.DefaultLanCidrs, .. NetworkInfo.GetPublicLocalSubnets(InterfaceName)],
-            tunnelLuid);
+            tunnelLuid, [ServerIp, .. extraServerIps]);
+        killSwitchTunnel = tunnelLuid;
         KillSwitchActive = true;
         log.Info(tunnelLuid == null ? "Kill switch включён" : "Kill switch: трафик через TUN разрешён");
     }
