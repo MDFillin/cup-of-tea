@@ -116,5 +116,45 @@ public sealed partial class MainViewModel
 
     [ObservableProperty] private string serverFilter = "";
 
-    partial void OnServerFilterChanged(string value) => ProfilesView.Refresh();
+    partial void OnServerFilterChanged(string value)
+    {
+        ProfilesView.Refresh();
+        GroupsVersion++;
+    }
+
+    /// <summary>Меняется при сворачивании групп и поиске: по нему заголовки групп перечитывают своё состояние.</summary>
+    [ObservableProperty] private int groupsVersion;
+
+    /// <summary>Группа развёрнута: при поиске — всегда (найденное не прячется), иначе — как оставил пользователь.</summary>
+    public bool IsGroupExpanded(string group) =>
+        !string.IsNullOrWhiteSpace(ServerFilter) || !settings.CollapsedGroups.Contains(group, StringComparer.Ordinal);
+
+    /// <summary>Пользователь свернул или развернул группу. При поиске не запоминается: там все группы открыты.</summary>
+    public void SetGroupExpanded(string group, bool expanded)
+    {
+        if (!string.IsNullOrWhiteSpace(ServerFilter) || IsGroupExpanded(group) == expanded)
+            return;
+        if (expanded)
+            settings.CollapsedGroups.RemoveAll(g => g == group);
+        else
+            settings.CollapsedGroups.Add(group);
+        SaveSettings();
+        GroupsVersion++;
+    }
+
+    [RelayCommand]
+    private void CollapseAllGroups()
+    {
+        settings.CollapsedGroups = [.. Profiles.Select(p => p.Group).Distinct()];
+        SaveSettings();
+        GroupsVersion++;
+    }
+
+    [RelayCommand]
+    private void ExpandAllGroups()
+    {
+        settings.CollapsedGroups.Clear();
+        SaveSettings();
+        GroupsVersion++;
+    }
 }

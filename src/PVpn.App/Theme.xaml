@@ -1,7 +1,8 @@
 <!-- Палитра и стили The Cup of Tea (только тёмная тема). Поверх тёмной темы WPF-UI: её элементы (кнопки, поля, переключатели) остаются. -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+                    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                    xmlns:local="clr-namespace:PVpn.App">
     <FontFamily x:Key="Display">Segoe UI Variable Display, Segoe UI</FontFamily>
     <FontFamily x:Key="Body">Segoe UI Variable Text, Segoe UI</FontFamily>
 
@@ -48,6 +49,40 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{StaticResource Text2}" />
         <Setter Property="Margin" Value="4,22,0,8" />
+    </Style>
+    <!-- Заголовок группы серверов (подписки): щелчок сворачивает и разворачивает. DataContext — CollectionViewGroup. -->
+    <Style x:Key="GroupHeader" TargetType="ToggleButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="True" />
+        <Setter Property="Margin" Value="0,6,0,2" />
+        <Setter Property="ToolTip" Value="Свернуть или развернуть группу" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Root" Background="Transparent" CornerRadius="8" Padding="8,7">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon x:Name="Arrow" Symbol="ChevronRight20" FontSize="14" Foreground="{StaticResource Text3}" VerticalAlignment="Center"
+                                           local:Motion.Turned="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}}" />
+                            <TextBlock x:Name="Caption" local:FlagText.Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text2}"
+                                       Margin="8,0,0,0" VerticalAlignment="Center" />
+                            <Border CornerRadius="8" Background="{StaticResource Surface3}" Padding="7,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ItemCount}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Text2}" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface2}" />
+                            <Setter TargetName="Caption" Property="Foreground" Value="{StaticResource Text1}" />
+                            <Setter TargetName="Arrow" Property="Foreground" Value="{StaticResource Text1}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface2}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
     <Style x:Key="Hint" TargetType="TextBlock">
         <Setter Property="FontSize" Value="13" />
@@ -109,6 +144,7 @@
     <!-- Строка настроек целиком — кнопка: открывает свою страницу -->
     <Style x:Key="RowButton" TargetType="Button">
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="local:Motion.PressScale" Value="0.985" />
         <Setter Property="Foreground" Value="{StaticResource Text1}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Template">
@@ -152,6 +188,7 @@
     <!-- ───── Сегменты: «Весь трафик / Только прокси» и режимы раздельного туннелирования ───── -->
     <Style x:Key="Segment" TargetType="RadioButton">
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="local:Motion.PressScale" Value="0.96" />
         <Setter Property="Foreground" Value="{StaticResource Text2}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Template">
@@ -192,6 +229,7 @@
     <!-- ───── Боковое меню ───── -->
     <Style x:Key="NavItem" TargetType="ListBoxItem">
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="local:Motion.PressScale" Value="0.97" />
         <Setter Property="Foreground" Value="{StaticResource Text2}" />
         <Setter Property="FontSize" Value="15" />
         <Setter Property="Template">

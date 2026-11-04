@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using Wpf.Ui.Controls;
 
@@ -80,6 +81,13 @@ public partial class MainWindow : FluentWindow
         }
         lastClickItem = item;
         lastClickAt = now;
+    }
+
+    /// <summary>Щелчок по заголовку группы серверов: свернуть или развернуть её (и запомнить).</summary>
+    private void GroupToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Primitives.ToggleButton { DataContext: CollectionViewGroup { Name: string group } } toggle)
+            vm.SetGroupExpanded(group, toggle.IsChecked == true);
     }
 
     private void DismissNotice_Click(object sender, RoutedEventArgs e) => vm.Notice = null;

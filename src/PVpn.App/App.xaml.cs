@@ -48,7 +48,7 @@ public partial class App : Application
         var accent = (Color)FindResource("AccentColor");
         ApplicationAccentColorManager.Apply(accent, Color.FromRgb(0x2B, 0xB9, 0x88), accent, Color.FromRgb(0x6E, 0xE7, 0xB7));
 
-        vm = new MainViewModel();
+        vm = new MainViewModel { SnapshotMode = snapshot != null };
         window = new MainWindow(vm);
         await vm.InitializeAsync();
 

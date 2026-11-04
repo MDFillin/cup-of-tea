@@ -107,7 +107,7 @@
                     </Grid.RowDefinitions>
 
                     <!-- ───────── Главная ───────── -->
-                    <Grid Grid.Row="0" Grid.RowSpan="2" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=0}">
+                    <Grid Grid.Row="0" Grid.RowSpan="2" local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=0}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="40" />
                             <RowDefinition Height="*" />
@@ -116,7 +116,7 @@
 
                         <!-- Мягкое свечение цвета состояния за кнопкой -->
                         <Ellipse Grid.RowSpan="3" Width="640" Height="520" VerticalAlignment="Top" Margin="0,-40,0,0" IsHitTestVisible="False"
-                                 Fill="{Binding StateBrush}">
+                                 Fill="{Binding StateBrush}" local:Motion.FadeOnChange="{Binding State}">
                             <Ellipse.OpacityMask>
                                 <RadialGradientBrush>
                                     <GradientStop Color="#22FFFFFF" Offset="0" />
@@ -149,59 +149,118 @@
 
                         <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40,0">
                             <!-- Плашка состояния -->
-                            <Grid HorizontalAlignment="Center">
+                            <Grid HorizontalAlignment="Center" local:Motion.FadeOnChange="{Binding State}">
                                 <Border CornerRadius="14" Background="{Binding StateBrush}" Opacity="0.14" />
                                 <StackPanel Orientation="Horizontal" Margin="12,5">
                                     <Ellipse Width="8" Height="8" Fill="{Binding StateBrush}" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding StateLabel}" FontWeight="SemiBold" Foreground="{Binding StateBrush}" Margin="8,0,0,0" />
                                 </StackPanel>
                             </Grid>
-                            <TextBlock Text="{Binding BigStatus}" FontFamily="{StaticResource Display}" FontSize="42" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding BigStatus}" local:Motion.FadeOnChange="{Binding State}" FontFamily="{StaticResource Display}" FontSize="42" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,6,0,0" />
                             <TextBlock Text="{Binding StatusDetail}" Foreground="{StaticResource Text2}" HorizontalAlignment="Center" TextAlignment="Center"
                                        TextWrapping="Wrap" MaxWidth="560"
                                        Visibility="{Binding StatusDetail, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
 
-                            <!-- Кнопка питания: цвет — по состоянию -->
+                            <!-- Кнопка питания: цвет — по состоянию. Заливки лежат друг над другом и плавно сменяются;
+                                 при подключении крутится дуга, при успешном подключении расходится волна. -->
                             <Button x:Name="PowerButton" Command="{Binding ToggleConnectCommand}" Margin="0,14,0,10" Cursor="Hand" HorizontalAlignment="Center"
-                                    AutomationProperties.Name="{Binding ConnectButtonText}">
+                                    AutomationProperties.Name="{Binding ConnectButtonText}" local:Motion.PressScale="0.94">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Grid x:Name="Root" Width="210" Height="210" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                        <Grid x:Name="Root" Width="210" Height="210" Background="Transparent">
+                                            <Ellipse x:Name="Ripple" Stroke="{StaticResource Accent}" StrokeThickness="2" Opacity="0" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                                                <Ellipse.RenderTransform><ScaleTransform /></Ellipse.RenderTransform>
+                                            </Ellipse>
                                             <Ellipse x:Name="Ring1" Stroke="{StaticResource Line}" StrokeThickness="1" />
                                             <Ellipse x:Name="Ring2" Margin="16" Stroke="{StaticResource Line}" StrokeThickness="1.5" />
+                                            <Ellipse x:Name="Spinner" Margin="16" Stroke="#F5B544" StrokeThickness="2.5" StrokeDashArray="18 60" StrokeDashCap="Round"
+                                                     Opacity="0" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                                                <Ellipse.RenderTransform><RotateTransform /></Ellipse.RenderTransform>
+                                            </Ellipse>
                                             <Ellipse x:Name="Disc" Margin="32" Fill="{StaticResource HeroOff}" Effect="{StaticResource HeroOffGlow}" />
+                                            <Ellipse x:Name="DiscOn" Margin="32" Fill="{StaticResource HeroOn}" Effect="{StaticResource HeroOnGlow}" Opacity="0" />
+                                            <Ellipse x:Name="DiscBusy" Margin="32" Fill="{StaticResource HeroBusy}" Effect="{StaticResource HeroBusyGlow}" Opacity="0" />
+                                            <Ellipse x:Name="DiscError" Margin="32" Fill="{StaticResource HeroError}" Effect="{StaticResource HeroErrorGlow}" Opacity="0" />
                                             <ui:SymbolIcon x:Name="Icon" Symbol="Power24" FontSize="58" Foreground="{StaticResource Text1}"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Grid>
                                         <ControlTemplate.Triggers>
                                             <DataTrigger Binding="{Binding State}" Value="On">
-                                                <Setter TargetName="Disc" Property="Fill" Value="{StaticResource HeroOn}" />
-                                                <Setter TargetName="Disc" Property="Effect" Value="{StaticResource HeroOnGlow}" />
                                                 <Setter TargetName="Ring1" Property="Stroke" Value="#334ADE80" />
                                                 <Setter TargetName="Ring2" Property="Stroke" Value="#77A3E635" />
                                                 <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource OnAccent}" />
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="DiscOn" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+                                                            <DoubleAnimation Storyboard.TargetName="Ripple" Storyboard.TargetProperty="Opacity" From="0.7" To="0" Duration="0:0:0.7" />
+                                                            <DoubleAnimation Storyboard.TargetName="Ripple" Storyboard.TargetProperty="RenderTransform.ScaleX" From="0.8" To="1.35" Duration="0:0:0.7">
+                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
+                                                            <DoubleAnimation Storyboard.TargetName="Ripple" Storyboard.TargetProperty="RenderTransform.ScaleY" From="0.8" To="1.35" Duration="0:0:0.7">
+                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="DiscOn" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding State}" Value="Busy">
-                                                <Setter TargetName="Disc" Property="Fill" Value="{StaticResource HeroBusy}" />
-                                                <Setter TargetName="Disc" Property="Effect" Value="{StaticResource HeroBusyGlow}" />
                                                 <Setter TargetName="Ring1" Property="Stroke" Value="#33F5B544" />
-                                                <Setter TargetName="Ring2" Property="Stroke" Value="#55F5B544" />
+                                                <Setter TargetName="Ring2" Property="Stroke" Value="#22F5B544" />
                                                 <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource OnAccent}" />
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="DiscBusy" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+                                                            <DoubleAnimation Storyboard.TargetName="Spinner" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                    <!-- Дуга крутится только пока идёт подключение или отключение -->
+                                                    <BeginStoryboard x:Name="Spin">
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="Spinner" Storyboard.TargetProperty="RenderTransform.Angle"
+                                                                             From="0" To="360" Duration="0:0:1.1" RepeatBehavior="Forever" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <StopStoryboard BeginStoryboardName="Spin" />
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="DiscBusy" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
+                                                            <DoubleAnimation Storyboard.TargetName="Spinner" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding State}" Value="Error">
-                                                <Setter TargetName="Disc" Property="Fill" Value="{StaticResource HeroError}" />
-                                                <Setter TargetName="Disc" Property="Effect" Value="{StaticResource HeroErrorGlow}" />
                                                 <Setter TargetName="Ring1" Property="Stroke" Value="#33F87171" />
                                                 <Setter TargetName="Ring2" Property="Stroke" Value="#55F87171" />
                                                 <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource OnAccent}" />
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="DiscError" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="DiscError" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
                                             </DataTrigger>
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter TargetName="Ring1" Property="StrokeThickness" Value="2" />
-                                            </Trigger>
-                                            <Trigger Property="IsPressed" Value="True">
-                                                <Setter TargetName="Root" Property="RenderTransform">
-                                                    <Setter.Value><ScaleTransform ScaleX="0.97" ScaleY="0.97" /></Setter.Value>
-                                                </Setter>
                                             </Trigger>
                                             <Trigger Property="IsEnabled" Value="False">
                                                 <Setter TargetName="Root" Property="Opacity" Value="0.5" />
@@ -306,7 +365,7 @@
                                 </Grid>
                             </Border>
 
-                            <UniformGrid Columns="4" Margin="-6,12,-6,0">
+                            <UniformGrid Columns="4" local:Motion.FadeInOnShow="True" Margin="-6,12,-6,0">
                                 <UniformGrid.Style>
                                     <Style TargetType="UniformGrid">
                                         <Setter Property="Visibility" Value="Collapsed" />
@@ -370,7 +429,7 @@
                     </Grid>
 
                     <!-- ───────── Серверы ───────── -->
-                    <DockPanel Grid.Row="1" Margin="40,0,40,16" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=1}">
+                    <DockPanel Grid.Row="1" Margin="40,0,40,16" local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=1}">
                         <StackPanel DockPanel.Dock="Top">
                             <TextBlock Text="Серверы" Style="{StaticResource H1}" />
                             <TextBlock Text="Двойной щелчок — подключиться к серверу (при включённом VPN — переключиться)" Style="{StaticResource Sub}" FontSize="14" />
@@ -397,6 +456,10 @@
                             </StackPanel>
                         </Grid>
                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <ui:Button DockPanel.Dock="Right" Icon="{ui:SymbolIcon ArrowMaximizeVertical24}" Margin="8,0,0,0" Command="{Binding ExpandAllGroupsCommand}"
+                                       AutomationProperties.Name="Развернуть все группы" ToolTip="Развернуть все группы" />
+                            <ui:Button DockPanel.Dock="Right" Icon="{ui:SymbolIcon ArrowMinimizeVertical24}" Margin="8,0,0,0" Command="{Binding CollapseAllGroupsCommand}"
+                                       AutomationProperties.Name="Свернуть все группы" ToolTip="Свернуть все группы" />
                             <ComboBox DockPanel.Dock="Right" MinWidth="170" Margin="8,0,0,0" AutomationProperties.Name="Сортировка серверов"
                                       ItemsSource="{Binding SortChoices}" DisplayMemberPath="Title" SelectedValuePath="Key" SelectedValue="{Binding ServerSort}" />
                             <ui:TextBox PlaceholderText="Поиск по имени или адресу" Icon="{ui:SymbolIcon Search24}"
@@ -405,15 +468,35 @@
 
                         <Border Style="{StaticResource Card}" Padding="6">
                             <Grid>
+                                <!-- Прокрутка по пикселям: с группами иначе список прыгает целыми группами -->
                                 <ListBox x:Name="ServerList" ItemsSource="{Binding ProfilesView}" SelectedItem="{Binding SelectedProfile}" PreviewMouseLeftButtonDown="ServerList_PreviewMouseLeftButtonDown"
-                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" Background="Transparent" BorderThickness="0">
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.ScrollUnit="Pixel" Background="Transparent" BorderThickness="0">
+                                    <!-- Группа (подписка или «Свои») сворачивается щелчком по заголовку; состояние запоминается -->
                                     <ListBox.GroupStyle>
                                         <GroupStyle>
-                                            <GroupStyle.HeaderTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock local:FlagText.Text="{Binding Name}" Style="{StaticResource GroupTitle}" Margin="12,10,0,6" />
-                                                </DataTemplate>
-                                            </GroupStyle.HeaderTemplate>
+                                            <GroupStyle.ContainerStyle>
+                                                <Style TargetType="GroupItem">
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="GroupItem">
+                                                                <StackPanel>
+                                                                    <ToggleButton x:Name="Toggle" Style="{StaticResource GroupHeader}" Click="GroupToggle_Click"
+                                                                                  AutomationProperties.Name="{Binding Name}">
+                                                                        <ToggleButton.IsChecked>
+                                                                            <MultiBinding Converter="{x:Static local:GroupExpanded.Instance}" Mode="OneWay">
+                                                                                <Binding Path="Name" />
+                                                                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                                                                <Binding Path="DataContext.GroupsVersion" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                                                            </MultiBinding>
+                                                                        </ToggleButton.IsChecked>
+                                                                    </ToggleButton>
+                                                                    <ItemsPresenter local:Motion.IsOpen="{Binding IsChecked, ElementName=Toggle}" />
+                                                                </StackPanel>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </GroupStyle.ContainerStyle>
                                         </GroupStyle>
                                     </ListBox.GroupStyle>
                                     <!-- Выбранный сервер — подсветка и полоска цвета акцента -->
@@ -483,7 +566,7 @@
 
                     <!-- ───────── Маршруты (раздельное туннелирование) ───────── -->
                     <Grid Grid.Row="1" Margin="40,0,40,16" DataContext="{Binding Split}"
-                          Visibility="{Binding DataContext.Page, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=2}">
+                          local:Motion.FadeInOnShow="True" Visibility="{Binding DataContext.Page, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=2}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -662,10 +745,10 @@
 
                     <!-- ───────── Настройки ───────── -->
                     <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                                  Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=3}">
+                                  local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=3}">
                         <Grid Margin="40,0,40,24">
                             <!-- Список настроек -->
-                            <StackPanel Visibility="{Binding SettingsPage, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=none}">
+                            <StackPanel local:Motion.FadeInOnShow="True" Visibility="{Binding SettingsPage, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=none}">
                                 <TextBlock Text="Настройки" Style="{StaticResource H1}" />
                                 <TextBlock Text="Пункты со стрелкой открывают свою страницу" Style="{StaticResource Sub}" FontSize="14" />
 
@@ -854,7 +937,7 @@
                             </StackPanel>
 
                             <!-- ── Страницы настроек: заголовок с кнопкой «назад» ── -->
-                            <StackPanel Visibility="{Binding SettingsPage, Converter={x:Static local:EmptyToCollapsed.Instance}}">
+                            <StackPanel local:Motion.FadeInOnShow="True" Visibility="{Binding SettingsPage, Converter={x:Static local:EmptyToCollapsed.Instance}}">
                                 <StackPanel Orientation="Horizontal" Margin="-8,0,0,18">
                                     <ui:Button Icon="{ui:SymbolIcon ArrowLeft24}" Appearance="Transparent" Command="{Binding OpenSettingsCommand}" CommandParameter="{x:Null}"
                                                AutomationProperties.Name="Назад к настройкам" ToolTip="Назад к настройкам" VerticalAlignment="Center" />
@@ -1176,7 +1259,7 @@
                     </ScrollViewer>
 
                     <!-- ───────── Журнал ───────── -->
-                    <DockPanel Grid.Row="1" Margin="40,0,40,16" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=4}">
+                    <DockPanel Grid.Row="1" Margin="40,0,40,16" local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=4}">
                         <StackPanel DockPanel.Dock="Top">
                             <TextBlock Text="Журнал" Style="{StaticResource H1}" />
                             <TextBlock Text="Сообщения программы, службы и ядер — без ключей и ссылок" Style="{StaticResource Sub}" FontSize="14" />

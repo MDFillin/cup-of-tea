@@ -65,6 +65,20 @@ public sealed class ModeName : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
+/// <summary>
+/// Развёрнута ли группа серверов: имя группы, окно (MainViewModel) и GroupsVersion — по нему значение пересчитывается,
+/// когда группы сворачивают все разом или начинают поиск.
+/// </summary>
+public sealed class GroupExpanded : IMultiValueConverter
+{
+    public static readonly GroupExpanded Instance = new();
+
+    public object Convert(object?[] values, Type targetType, object? parameter, CultureInfo culture) =>
+        values is [string group, MainViewModel vm, ..] ? vm.IsGroupExpanded(group) : true;
+
+    public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 /// <summary>Заголовок страницы настроек по её имени.</summary>
 public sealed class SettingsTitle : IValueConverter
 {

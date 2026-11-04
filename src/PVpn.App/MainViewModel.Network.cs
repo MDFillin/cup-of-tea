@@ -75,7 +75,7 @@ public sealed partial class MainViewModel
     /// <summary>Смена сети или запуск: подключиться, отключиться или ничего не делать.</summary>
     private async Task EvaluateNetworkAsync()
     {
-        if (evaluating || networkDebounce == null || WaitingForLogin)
+        if (SnapshotMode || evaluating || networkDebounce == null || WaitingForLogin)
             return;
         evaluating = true;
         try

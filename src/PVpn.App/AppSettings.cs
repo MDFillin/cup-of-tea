@@ -79,6 +79,9 @@ public sealed class AppSettings
     /// <summary>Сортировка серверов: none, ping, name.</summary>
     public string ServerSort { get; set; } = "none";
 
+    /// <summary>Свёрнутые группы в списке серверов (имя подписки или «Свои»).</summary>
+    public List<string> CollapsedGroups { get; set; } = [];
+
     /// <summary>Пинг серверов при запуске и после обновления подписки.</summary>
     public bool AutoPing { get; set; } = true;
 

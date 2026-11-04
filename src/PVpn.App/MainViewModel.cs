@@ -134,6 +134,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public bool IsActive => State is UiState.On or UiState.Busy;
     public bool CanChangeMode => !IsActive;
 
+    /// <summary>
+    /// Окно рисуется в PNG (--snapshot): подключение службы не трогать — ни автоподключением, ни отключением при выходе.
+    /// Снимок читает настоящую службу, и раньше его выход отключал работающий VPN.
+    /// </summary>
+    public bool SnapshotMode { get; init; }
+
     public string AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "?";
 
     /// <summary>Сменилось состояние, имя сервера или подсказка — для трея.</summary>
@@ -1355,6 +1361,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         timer.Stop();
+        if (SnapshotMode)
+            return;
         // «Выход» выключает VPN в обоих режимах: прокси живёт в интерфейсе (системный прокси возвращается),
         // TUN держит служба — её просим отключиться. Сама служба остаётся запущенной.
         if (proxy != null || proxyStarting)
