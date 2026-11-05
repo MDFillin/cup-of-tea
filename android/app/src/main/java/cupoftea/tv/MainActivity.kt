@@ -9,7 +9,6 @@ import cupoftea.tv.data.Repository
 import cupoftea.tv.ui.AppRoot
 import cupoftea.tv.ui.UiActions
 import cupoftea.tv.vpn.CupVpnService
-import cupoftea.tv.vpn.VpnState
 
 class MainActivity : ComponentActivity() {
     private var pendingServer: String? = null
@@ -27,10 +26,7 @@ class MainActivity : ComponentActivity() {
         val actions = UiActions(
             connect = ::connect,
             disconnect = { CupVpnService.disconnect(this) },
-            reapply = {
-                // Настройки подключения поменялись — переподключаемся к тому же серверу (TUN поднимется заново).
-                (CupVpnService.state.value as? VpnState.On)?.let { CupVpnService.connect(this, it.serverId) }
-            },
+            reapply = { CupVpnService.reconnectIfOn(this) },
         )
         setContent { AppRoot(repo, actions) }
     }

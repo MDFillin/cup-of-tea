@@ -95,6 +95,11 @@ class CupVpnService : VpnService() {
             if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent) else context.startService(intent)
         }
 
+        /** Настройки подключения изменились: если VPN включён — переподключиться с ними к тому же серверу. */
+        fun reconnectIfOn(context: Context) {
+            (_state.value as? VpnState.On)?.let { connect(context, it.serverId) }
+        }
+
         fun disconnect(context: Context) {
             if (_state.value == VpnState.Off) return
             context.startService(Intent(context, CupVpnService::class.java).setAction(ACTION_DISCONNECT))

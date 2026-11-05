@@ -50,12 +50,14 @@ fun ServersScreen(repo: Repository, actions: UiActions) {
     val scope = rememberCoroutineScope()
     var menuFor by remember { mutableStateOf<Profile?>(null) }
     var updating by remember { mutableStateOf(false) }
+    var phone by remember { mutableStateOf(false) }
     val groups = repo.groups(data)
     val connectedId = (state as? VpnState.On)?.serverId
 
     Column {
         ScreenTitle("Серверы", "OK — подключиться, долгое нажатие — меню сервера · порядок: ${sortTitles[settings.sortOrder]}")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            CupButton("Добавить") { phone = true }
             CupButton(if (pinging) "Пинг…" else "Пинг всех") { scope.launch { repo.pingAll() } }
             CupButton(if (updating) "Обновляю…" else "Обновить") {
                 if (!updating) scope.launch {
@@ -79,7 +81,7 @@ fun ServersScreen(repo: Repository, actions: UiActions) {
         }
         message?.let { Hint(it, Palette.Warn, Modifier.padding(top = 8.dp)) }
         if (groups.isEmpty()) {
-            Hint("Серверов пока нет. Добавить подписку или ссылки можно с телефона — «Настройки → Добавить с телефона».", Palette.Text2, Modifier.padding(top = 24.dp))
+            Hint("Серверов пока нет. Нажмите «Добавить» — ссылку подписки можно вставить с телефона.", Palette.Text2, Modifier.padding(top = 24.dp))
         }
 
         LazyColumn(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -107,6 +109,8 @@ fun ServersScreen(repo: Repository, actions: UiActions) {
             }
         }
     }
+
+    if (phone) PhoneDialog { phone = false }
 
     menuFor?.let { p ->
         ServerMenu(

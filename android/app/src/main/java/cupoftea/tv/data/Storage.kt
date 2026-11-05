@@ -88,6 +88,10 @@ data class AppSettings(
     val dns: DnsOptions = DnsOptions(),
     /** Свой профиль маршрутизации для серверов по ссылкам; null — всё через VPN. */
     val routing: RoutingProfile? = null,
+    /** Откуда обновлять свой профиль маршрутизации (autorouting) — раз в сутки; null — профиль постоянный. */
+    val routingUrl: String? = null,
+    /** Когда профиль по routingUrl обновлялся (секунды Unix). */
+    val routingUpdated: Long = 0,
     /** Маршруты серверов с полным конфигом из подписки. */
     val useServerRouting: Boolean = true,
     val splitMode: SplitMode = SplitMode.Off,

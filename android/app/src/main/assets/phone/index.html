@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>The Cup of Tea — на телевизор</title>
+<style>
+  :root {
+    --bg: #f4f6f5; --card: #ffffff; --text: #101412; --muted: #5d6762; --line: #dde3df;
+    --accent: #0f9f6e; --on-accent: #ffffff; --ok: #0f9f6e; --err: #c2413b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #090b0a; --card: #131715; --text: #f2f5f3; --muted: #9ba59f; --line: #222925;
+            --accent: #34d399; --on-accent: #08100b; --ok: #34d399; --err: #f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 22px; margin: 4px 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  p.hint { color: var(--muted); font-size: 13px; margin: 6px 0 10px; }
+  textarea, input { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+                    border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  textarea { min-height: 130px; resize: vertical; }
+  button { margin-top: 10px; width: 100%; font: inherit; font-weight: 600; padding: 14px; border: 0;
+           border-radius: 10px; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+  button:disabled { opacity: .55; }
+  .result { margin-top: 10px; font-size: 14px; white-space: pre-wrap; }
+  .result.ok { color: var(--ok); } .result.err { color: var(--err); }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The Cup of Tea → телевизор</h1>
+  <p class="sub">Вставьте ссылку здесь — телевизор получит её сразу. Страница работает, пока на ТВ открыт экран «Добавить с телефона».</p>
+
+  <section>
+    <h2>Подписка, серверы или маршруты</h2>
+    <p class="hint">Ссылка подписки (https://…), ссылки серверов (vless://, hy2://, trojan://, vmess://, ss://), ссылка
+      cupoftea://… или профиль маршрутизации. Можно вставить сразу несколько ссылок.</p>
+    <textarea id="text" placeholder="https://… или vless://…" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+    <button id="send">Отправить на ТВ</button>
+    <div id="result" class="result" role="status"></div>
+  </section>
+
+  <section>
+    <h2>Свой DNS</h2>
+    <p class="hint">Адрес DNS-over-HTTPS, например https://dns.example.com/dns-query. Запросы пойдут через туннель.</p>
+    <input id="dns" placeholder="https://…/dns-query" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="sendDns">Включить на ТВ</button>
+    <div id="dnsResult" class="result" role="status"></div>
+  </section>
+
+  <section>
+    <h2>Диагностика</h2>
+    <p class="hint">Версии, настройки и журнал ядра — без ключей, ссылок подписок и адресов серверов.</p>
+    <a id="diag" href="#">Скачать файл диагностики</a>
+  </section>
+
+  <footer>Ссылки передаются по вашей домашней сети прямо на телевизор.</footer>
+</main>
+<script>
+  const base = location.pathname.replace(/\/+$/, "");
+  document.getElementById("diag").href = base + "/diag";
+
+  async function send(path, value, button, out) {
+    value = value.trim();
+    if (!value) { out.className = "result err"; out.textContent = "Пусто — вставьте ссылку."; return; }
+    button.disabled = true;
+    out.className = "result"; out.textContent = "Отправляю…";
+    try {
+      const r = await fetch(base + path, { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: value });
+      const text = await r.text();
+      const bad = !r.ok || /^(Не понял|Подписка не добавлена|Не удалось)/.test(text);
+      out.className = "result " + (bad ? "err" : "ok");
+      out.textContent = text;
+    } catch (e) {
+      out.className = "result err";
+      out.textContent = "Телевизор не ответил. Экран «Добавить с телефона» на ТВ открыт? Телефон в той же Wi-Fi сети?";
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  const sendBtn = document.getElementById("send");
+  sendBtn.onclick = () => send("/add", document.getElementById("text").value, sendBtn, document.getElementById("result"));
+  const dnsBtn = document.getElementById("sendDns");
+  dnsBtn.onclick = () => send("/dns", document.getElementById("dns").value, dnsBtn, document.getElementById("dnsResult"));
+</script>
+</body>
+</html>

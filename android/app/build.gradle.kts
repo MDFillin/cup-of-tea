@@ -67,4 +67,6 @@ dependencies {
     implementation(libs.tv.material)
     implementation(libs.activity.compose)
     implementation(libs.coroutines.android)
+    // QR-код адреса страницы для телефона (только генерация, без камеры)
+    implementation(libs.zxing.core)
 }

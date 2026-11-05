@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.util.Log
 import cupoftea.tv.data.Repository
+import cupoftea.tv.data.refreshAutorouting
 import cupoftea.tv.vpn.CupVpnService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -24,6 +25,7 @@ class CupApp : Application() {
             while (isActive) {
                 try {
                     repo.updateDueSubscriptions().lastOrNull()?.let { repo.say(it) }
+                    repo.refreshAutorouting(this@CupApp)
                 } catch (e: Exception) {
                     Log.w("CupApp", "обновление подписок", e)
                 }

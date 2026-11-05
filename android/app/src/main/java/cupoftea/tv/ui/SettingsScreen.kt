@@ -32,6 +32,8 @@ fun SettingsScreen(repo: Repository, actions: UiActions) {
     val scope = rememberCoroutineScope()
     var geoStatus by remember { mutableStateOf<String?>(null) }
     var subStatus by remember { mutableStateOf<String?>(null) }
+    var phone by remember { mutableStateOf(false) }
+    if (phone) PhoneDialog { phone = false }
     val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
 
     fun change(apply: (cupoftea.tv.data.AppSettings) -> cupoftea.tv.data.AppSettings) {
@@ -41,6 +43,12 @@ fun SettingsScreen(repo: Repository, actions: UiActions) {
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         item { ScreenTitle("Настройки") }
+        item {
+            SettingRow(
+                "Добавить с телефона",
+                "Подписка, ссылки серверов, профиль маршрутизации, свой DNS, диагностика — через страницу в домашней сети",
+            ) { phone = true }
+        }
 
         item { SectionTitle("Обход блокировок — для серверов по ссылкам") }
         item { Hint("У серверов из подписки свои настройки обхода от панели.", Palette.Text2) }
@@ -79,7 +87,7 @@ fun SettingsScreen(repo: Repository, actions: UiActions) {
         }
 
         item { SectionTitle("Подписки") }
-        if (data.subscriptions.isEmpty()) item { Hint("Подписок нет. Добавить можно с телефона (скоро).", Palette.Text2) }
+        if (data.subscriptions.isEmpty()) item { Hint("Подписок нет. Добавить — «Добавить с телефона» в начале страницы.", Palette.Text2) }
         items(data.subscriptions, key = { it.id }) { s ->
             val updated = s.lastUpdated?.let { "обновлена " + dateFormat.format(Date(it * 1000)) } ?: "не обновлялась"
             SettingRow(
