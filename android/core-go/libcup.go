@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/xtls/xray-core/common/platform"
@@ -129,6 +130,48 @@ func (i *Instance) Counter(name string, reset bool) int64 {
 		return c.Set(0)
 	}
 	return c.Value()
+}
+
+// Traffic — сумма счётчиков всех выходов (весь трафик через ядро) в направлении "uplink" или "downlink";
+// reset — обнулить после чтения. Вход tun своих счётчиков в xray не заводит, поэтому считаем по выходам,
+// а у серверов из подписки теги выходов свои. Нет статистики — -1.
+func (i *Instance) Traffic(direction string, reset bool) int64 {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.stats == nil {
+		return -1
+	}
+	suffix := ">>>traffic>>>" + direction
+	var total int64
+	i.stats.VisitCounters(func(name string, c stats.Counter) bool {
+		if strings.HasPrefix(name, "outbound>>>") && strings.HasSuffix(name, suffix) {
+			if reset {
+				total += c.Set(0)
+			} else {
+				total += c.Value()
+			}
+		}
+		return true
+	})
+	return total
+}
+
+// CounterNames — имена всех счётчиков статистики через перевод строки (для диагностики).
+func (i *Instance) CounterNames() string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.stats == nil {
+		return "(статистики нет)"
+	}
+	var b strings.Builder
+	i.stats.VisitCounters(func(name string, c stats.Counter) bool {
+		b.WriteString(name)
+		b.WriteString("=")
+		b.WriteString(strconv.FormatInt(c.Value(), 10))
+		b.WriteString("\n")
+		return true
+	})
+	return b.String()
 }
 
 func setAssets(assetDir string) {

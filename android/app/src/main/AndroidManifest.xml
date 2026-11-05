@@ -6,12 +6,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Список установленных приложений — для раздельного туннелирования по приложениям -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <!-- Работает и на ТВ, и на обычных устройствах -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
+        android:name=".CupApp"
         android:allowBackup="false"
         android:banner="@drawable/banner"
         android:icon="@drawable/banner"
@@ -29,6 +33,15 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".vpn.CupVpnService"
