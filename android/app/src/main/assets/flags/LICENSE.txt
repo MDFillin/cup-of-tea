@@ -1,0 +1,3 @@
+Изображения флагов — Twemoji (https://github.com/jdecked/twemoji), версия 15.1.0.
+Copyright 2019 Twitter, Inc and other contributors; 2024 jdecked and other contributors.
+Лицензия CC-BY 4.0: https://creativecommons.org/licenses/by/4.0/
