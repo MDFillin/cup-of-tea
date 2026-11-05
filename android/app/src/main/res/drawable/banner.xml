@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Временный баннер 320×180 для лаунчера ТВ; настоящий нарисуем на этапе интерфейса -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:fillColor="#FF16181A" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#FFB5E853" android:pathData="M120,60h70v40a35,35 0,0 1,-70 0z" />
+    <path android:strokeColor="#FFB5E853" android:strokeWidth="8" android:fillColor="#00000000"
+        android:pathData="M190,72h10a14,14 0,0 1,0 28h-12" />
+</vector>

@@ -1,0 +1,15 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+# собирается android\scripts\build-core.ps1 из core-go (xray), в git не кладём
+app/libs/*.aar
+app/libs/*.jar
+# ключи подписи и конфиги с серверами — никогда в репозиторий
+*.jks
+*.keystore
+keystore.properties
+spike*.json
+servers*.json
