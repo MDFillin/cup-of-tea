@@ -53,6 +53,8 @@ class UiActions(
     val disconnect: () -> Unit,
     /** Настройки подключения изменились: если VPN включён — переподключиться с ними. */
     val reapply: () -> Unit,
+    /** Скачать и поставить новую версию (с запросом разрешения на установку, если его нет). */
+    val installUpdate: (cupoftea.core.TvRelease) -> Unit,
 )
 
 @Composable

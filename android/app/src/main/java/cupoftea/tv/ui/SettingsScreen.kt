@@ -144,6 +144,9 @@ fun SettingsScreen(repo: Repository, actions: UiActions) {
             }
         }
 
+        item { SectionTitle("Обновления") }
+        item { UpdateSettings(actions) }
+
         item { SectionTitle("О программе") }
         item {
             Hint(

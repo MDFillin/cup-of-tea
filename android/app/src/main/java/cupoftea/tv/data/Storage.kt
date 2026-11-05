@@ -109,6 +109,8 @@ data class AppSettings(
     val wasConnected: Boolean = false,
     /** Предел памяти ядра, МБ (мягкий, для сборщика мусора Go); 0 — без предела. */
     val coreMemoryMb: Int = 96,
+    /** О какой версии уже было уведомление (один раз на версию). */
+    val notifiedVersion: String? = null,
 )
 
 class SettingsStore(context: Context) {

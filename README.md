@@ -6,6 +6,9 @@
 
 Архитектура и план MVP: [`D:\vpn\plan\client-windows.md`](../plan/client-windows.md).
 
+**Версия для Android TV** — в папке [`android/`](android/README.md): тот же клиент под пульт (Kotlin, Compose for TV,
+xray внутри приложения). Релизы — в этом же репозитории с тегами `tv-v<версия>`.
+
 ## Сборка
 ```powershell
 scripts\fetch-cores.ps1          # sing-box 1.14.4 и Xray 26.10.21 с GitHub, проверка SHA256 → cores\

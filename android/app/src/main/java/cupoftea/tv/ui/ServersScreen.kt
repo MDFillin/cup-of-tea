@@ -37,7 +37,7 @@ import java.util.Date
 import java.util.Locale
 
 private val sortTitles = mapOf("subscription" to "как в подписке", "ping" to "по пингу", "name" to "по имени")
-private val sortShort = mapOf("subscription" to "Порядок подписки", "ping" to "По пингу", "name" to "По имени")
+private val sortShort = mapOf("subscription" to "↕ Подписка", "ping" to "↕ Пинг", "name" to "↕ Имя")
 
 @Composable
 fun ServersScreen(repo: Repository, actions: UiActions) {
@@ -58,7 +58,7 @@ fun ServersScreen(repo: Repository, actions: UiActions) {
         ScreenTitle("Серверы", "OK — подключиться, долгое нажатие — меню сервера · порядок: ${sortTitles[settings.sortOrder]}")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             CupButton("Добавить") { phone = true }
-            CupButton(if (pinging) "Пинг…" else "Пинг всех") { scope.launch { repo.pingAll() } }
+            CupButton(if (pinging) "Пинг…" else "Пинг") { scope.launch { repo.pingAll() } }
             CupButton(if (updating) "Обновляю…" else "Обновить") {
                 if (!updating) scope.launch {
                     updating = true
@@ -70,7 +70,7 @@ fun ServersScreen(repo: Repository, actions: UiActions) {
                     }
                 }
             }
-            CupButton(sortShort[settings.sortOrder] ?: "Порядок подписки") {
+            CupButton(sortShort[settings.sortOrder] ?: "↕ Подписка") {
                 val keys = sortTitles.keys.toList()
                 repo.updateSettings { it.copy(sortOrder = keys[(keys.indexOf(it.sortOrder) + 1) % keys.size]) }
             }

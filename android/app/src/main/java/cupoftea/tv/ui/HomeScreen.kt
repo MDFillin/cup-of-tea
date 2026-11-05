@@ -115,6 +115,8 @@ fun HomeScreen(repo: Repository, actions: UiActions, openServers: () -> Unit) {
                 if (stats.serverDown) Hint("Сервер не отвечает: попробуйте другой в «Серверах»", Palette.Error)
             }
 
+            UpdateBanner(actions)
+
             sub?.announce?.let { announce ->
                 Box(Modifier.fillMaxWidth().padding(top = 6.dp)) {
                     Column(
