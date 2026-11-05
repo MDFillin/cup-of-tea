@@ -55,6 +55,13 @@ internal sealed class TrayIcon : IDisposable
             if (e.Button == Forms.MouseButtons.Left)
                 open();
         };
+        icon.BalloonTipClicked += (_, _) =>
+        {
+            var action = balloonClick;
+            balloonClick = null;
+            action?.Invoke();
+        };
+        icon.BalloonTipClosed += (_, _) => balloonClick = null;
         vm.TrayChanged += Update;
         Update();
     }
@@ -71,7 +78,15 @@ internal sealed class TrayIcon : IDisposable
         connectItem.Text = vm.ConnectButtonText;
     }
 
-    public void ShowBalloon(string title, string text) => icon.ShowBalloonTip(4000, title, text, Forms.ToolTipIcon.Info);
+    /// <summary>Что сделать по щелчку на показанном уведомлении; новое уведомление его заменяет.</summary>
+    private Action? balloonClick;
+
+    /// <param name="onClick">Щелчок по уведомлению (например, «установить обновление»); null — ничего.</param>
+    public void ShowBalloon(string title, string text, Action? onClick = null)
+    {
+        balloonClick = onClick;
+        icon.ShowBalloonTip(onClick != null ? 15000 : 4000, title, text, Forms.ToolTipIcon.Info);
+    }
 
     private static Drawing.Icon Load(string name)
     {

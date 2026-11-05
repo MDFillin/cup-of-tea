@@ -72,12 +72,21 @@ public partial class App : Application
             if (!window.IsActive)
                 tray.ShowBalloon(title, text);
         };
+        // О новой версии — всегда, даже при открытом окне; щелчок по уведомлению открывает настройки и ставит её.
+        vm.UpdateNotification += release => tray.ShowBalloon("Доступно обновление",
+            $"{Brand.Name} {release.Version.ToString(3)} — нажмите, чтобы установить.", () =>
+            {
+                ShowMainWindow();
+                window.ShowUpdates();
+                _ = vm.InstallFromNotificationAsync();
+            });
         hotkey = new GlobalHotkey(() => _ = vm.ToggleConnectCommand.ExecuteAsync(null));
         ApplyHotkey();
         vm.HotkeyChanged += ApplyHotkey;
         if (!e.Args.Contains("--tray"))
             ShowMainWindow();
         MainViewModel.RegisterLinkScheme();
+        _ = vm.CheckUpdateOnStartAsync();
         if (link != null)
             await vm.HandleLinkAsync(link, fromOutside: true);
     }

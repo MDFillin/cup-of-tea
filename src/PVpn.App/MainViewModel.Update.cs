@@ -11,12 +11,21 @@ using PVpn.Core.Cores;
 namespace PVpn.App;
 
 /// <summary>
-/// Обновление программы из неё самой (см. <see cref="AppUpdater"/>): проверка раз в день и по кнопке, скачивание
-/// установщика с проверкой SHA256 и тихая установка — Windows спросит права администратора, установщик закроет
-/// программу и службу и запустит новую версию.
+/// Обновление программы из неё самой (см. <see cref="AppUpdater"/>): проверка при запуске, раз в несколько часов и по
+/// кнопке, уведомление о новой версии (щелчок по нему — установить), скачивание установщика с проверкой SHA256 и тихая
+/// установка — Windows спросит права администратора, установщик закроет программу и службу и запустит новую версию.
 /// </summary>
 public sealed partial class MainViewModel
 {
+    /// <summary>Как часто проверять обновления, пока программа работает.</summary>
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(3);
+
+    /// <summary>Проверка при запуске — не сразу: после входа в Windows сеть и VPN поднимаются не мгновенно.</summary>
+    private static readonly TimeSpan StartupUpdateDelay = TimeSpan.FromSeconds(15);
+
+    /// <summary>Есть новая версия — показать уведомление, щелчок по которому её ставит (см. App).</summary>
+    public event Action<AppRelease>? UpdateNotification;
+
     [ObservableProperty] private string? updateText;
 
     [ObservableProperty]
@@ -45,13 +54,27 @@ public sealed partial class MainViewModel
 
     private async Task MaybeCheckAppUpdateAsync()
     {
-        if (!AppUpdater.Configured || Updating || settings.AppUpdateChecked > DateTimeOffset.Now.AddDays(-1))
+        if (!AppUpdater.Configured || Updating || settings.AppUpdateChecked > DateTimeOffset.Now - UpdateCheckInterval)
             return;
         await CheckForUpdateAsync(quiet: true);
     }
 
-    /// <param name="quiet">Проверка по расписанию: ошибки только в журнал, о новой версии — один раз.</param>
-    private async Task CheckForUpdateAsync(bool quiet)
+    /// <summary>При запуске программы: есть новая версия — уведомление каждый раз, а не один раз на версию.</summary>
+    public async Task CheckUpdateOnStartAsync()
+    {
+        if (SnapshotMode || !AppUpdater.Configured)
+            return;
+        await Task.Delay(StartupUpdateDelay);
+        if (!Updating)
+            await CheckForUpdateAsync(quiet: true, startup: true);
+    }
+
+    /// <summary>Щелчок по уведомлению: поставить найденную версию (или проверить заново, если её уже нет).</summary>
+    public Task InstallFromNotificationAsync() => UpdateAppCommand.CanExecute(null) ? UpdateAppCommand.ExecuteAsync(null) : Task.CompletedTask;
+
+    /// <param name="quiet">Проверка по расписанию: ошибки только в журнал, о новой версии — уведомление один раз.</param>
+    /// <param name="startup">Проверка при запуске: о новой версии — уведомление, даже если о ней уже сообщали.</param>
+    private async Task CheckForUpdateAsync(bool quiet, bool startup = false)
     {
         if (!AppUpdater.Configured)
         {
@@ -76,11 +99,11 @@ public sealed partial class MainViewModel
             {
                 var version = release.Version.ToString(3);
                 UpdateText = $"Доступна версия {version}." + (release.Notes is { } notes ? $"\n{notes}" : "");
-                if (quiet && settings.AppUpdateNotified != version)
+                if (quiet && (startup || settings.AppUpdateNotified != version))
                 {
                     settings.AppUpdateNotified = version;
                     AppendLog("app", $"Доступна новая версия {Brand.Name}: {version}");
-                    Notification?.Invoke("Доступно обновление", $"{Brand.Name} {version}: установить можно в «Настройки → Приложение».");
+                    UpdateNotification?.Invoke(release);
                 }
             }
             SaveSettings();
