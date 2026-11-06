@@ -38,10 +38,6 @@ public partial class App : Application
             Shutdown();
             return;
         }
-        // Серверы, настройки и копия системного прокси из папок PVpn (до переименования) — в папки The Cup of Tea.
-        if (snapshot == null)
-            LegacyData.MigrateUserData();
-
         // Только тёмная тема; акцент — свой зелёный, а не цвет Windows.
         ApplicationThemeManager.Apply(ApplicationTheme.Dark);
         // Тёмная тема WPF-UI сама осветляет акцент: задаём оттенки явно, чтобы кнопки и переключатели были того же зелёного.

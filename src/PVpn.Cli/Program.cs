@@ -14,8 +14,6 @@ using PVpn.Core.Sessions;
 using PVpn.Core.SystemProxy;
 
 Console.OutputEncoding = Encoding.UTF8;
-// Серверы и настройки из папок PVpn (до переименования) — в папки The Cup of Tea.
-LegacyData.MigrateUserData();
 
 if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
 {

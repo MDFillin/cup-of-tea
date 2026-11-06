@@ -17,9 +17,10 @@ namespace PVpn.Core.Net;
 /// </summary>
 public static unsafe class KillSwitch
 {
-    // Свои ключи поставщика и подслоя: по ним Disable находит фильтры без журнала.
-    private static readonly Guid ProviderKey = new("6f0b4a3e-7d2c-4f51-9a39-3c1f5e8b2a71");
-    private static readonly Guid SubLayerKey = new("a4e1c7d2-5b38-4e9a-8f06-2d71b9c3e554");
+    // Свои ключи поставщика и подслоя: по ним Disable находит фильтры без журнала. С 0.7.3 — собственные: прежние
+    // достались от клиента, с которого начинался код, и службы снимали kill switch друг у друга.
+    private static readonly Guid ProviderKey = new("4172958b-43b9-4ce1-ab4b-53414a9a9f8b");
+    private static readonly Guid SubLayerKey = new("d8303398-7a47-40f5-9ffd-5ef2c13a21c0");
 
     private const uint RpcCAuthnDefault = 0xFFFFFFFF;
     private const byte IpProtoUdp = 17;
@@ -48,7 +49,7 @@ public static unsafe class KillSwitch
     ];
 
     /// <summary>
-    /// Ставит фильтры, заменяя прежние фильтры PVpn в одной транзакции (окна без защиты нет).
+    /// Ставит фильтры, заменяя свои прежние фильтры в одной транзакции (окна без защиты нет).
     /// </summary>
     /// <param name="allowedApps">Полные пути к ядрам: им можно наружу мимо TUN.</param>
     /// <param name="lanCidrs">Локальные сети IPv4 (см. <see cref="DefaultLanCidrs"/>) и, например, 26.0.0.0/8 у Radmin.</param>

@@ -1,7 +1,7 @@
 ﻿# Устанавливает или обновляет The Cup of Tea: файлы в Program Files, служба CupOfTea (LocalSystem, автозапуск),
 # правило брандмауэра для sing-box (TUN-стек принимает соединения на адаптере TUN), ярлык в «Пуске».
 # Ядра из комплекта (cores-bundled) ставятся, только если они новее уже установленных: обновлённые в программе не откатываются.
-# Установку под прежним именем PVpn снимает (сеть возвращает её служба) и переносит её данные и более новые ядра.
+# Чужие программы (в том числе клиенты, от которых пошёл код) не трогает: только свою службу, папки и ярлык.
 # Глобальную политику брандмауэра не трогает. Запускать от администратора из папки комплекта (out\CupOfTea)
 # или установщиком из папки программы (тогда Source = Target).
 #Requires -RunAsAdministrator
@@ -25,15 +25,6 @@ $productName = 'The Cup of Tea'
 $serviceName = 'CupOfTea'
 $data = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'CupOfTea'
 $startMenu = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Microsoft\Windows\Start Menu\Programs'
-# Прежние имена: Tempest VPN и (до неё) PVpn. Их установка снимается, данные и более новые ядра переносятся.
-$legacies = @(
-    @{ Service = 'TempestVPN'; App = 'TempestVPN'; Title = 'Tempest VPN'; Folder = 'Tempest VPN'; Data = 'TempestVPN'; Link = 'Tempest VPN.lnk' },
-    @{ Service = 'PVpn'; App = 'PVpn'; Title = 'PVpn'; Folder = 'PVpn'; Data = 'PVpn'; Link = 'PVpn.lnk' }
-) | ForEach-Object {
-    $_.Target = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) $_.Folder
-    $_.DataDir = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) $_.Data
-    $_
-}
 
 if (-not (Test-Path (Join-Path $Source 'CupOfTea.Service.exe'))) { throw "В $Source нет CupOfTea.Service.exe — сначала scripts\build.ps1" }
 
@@ -67,26 +58,8 @@ $account = (Get-CimInstance Win32_ComputerSystem).UserName
 if (-not $account) { $account = [Security.Principal.WindowsIdentity]::GetCurrent().Name }
 if (-not $UserSid) {
     $UserSid = @((New-Object Security.Principal.NTAccount($account)).Translate([Security.Principal.SecurityIdentifier]).Value) +
-        (Read-AllowedSids $data) + @($legacies | ForEach-Object { Read-AllowedSids $_.DataDir }) | Where-Object { $_ } | Select-Object -Unique
+        (Read-AllowedSids $data) | Where-Object { $_ } | Select-Object -Unique
     Write-Host "Управлять службой сможет: $account$(if (@($UserSid).Count -gt 1) { " и ещё $(@($UserSid).Count - 1)" })"
-}
-
-# ── Прежние установки (Tempest VPN, PVpn): служба возвращает сеть и удаляется ──
-foreach ($old in $legacies) {
-    $legacy = Get-CimInstance Win32_Service -Filter "Name='$($old.Service)'" -ErrorAction SilentlyContinue
-    if (-not $legacy -and -not (Test-Path $old.Target)) { continue }
-    Write-Host "Найдена установка под прежним именем $($old.Title) — переношу"
-    Stop-AppProcess $old.App $old.Target
-    if ($legacy) {
-        Stop-ServiceAndWait $old.Service | Out-Null
-        $legacyExe = $legacy.PathName.Trim('"')
-        if (Test-Path $legacyExe) { & $legacyExe --repair | Out-Null }
-        sc.exe delete $old.Service | Out-Null
-    }
-    Get-NetFirewallRule -Group $old.Service -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-    Remove-Item (Join-Path $startMenu $old.Link) -ErrorAction SilentlyContinue
-    # Журналы и настройки службы переезжают, если у новой их ещё нет.
-    if ((Test-Path $old.DataDir) -and -not (Test-Path $data)) { Move-Item $old.DataDir $data }
 }
 
 # ── Файлы ──
@@ -98,7 +71,7 @@ if ((Resolve-Path $Source).Path -ne (Resolve-Path $Target).Path) {
     Copy-Item (Join-Path $Source '*') $Target -Recurse -Force
 }
 
-# ── Ядра: из установленных, прежней установки и комплекта — самое новое по ответу на «version» ──
+# ── Ядра: из установленных и комплекта — самое новое по ответу на «version» ──
 # Заодно это первый запуск ядер, пока сеть открыта: антивирус проверяет незнакомый exe в облаке,
 # а при подключении kill switch уже закрыл бы ему сеть, и старт xray затянулся бы на десятки секунд.
 function Get-CoreVersion([string]$Exe, [string]$Pattern) {
@@ -117,7 +90,7 @@ $versions = foreach ($core in @(
         @{ Title = 'sing-box'; Exe = 'sing-box.exe'; License = 'LICENSE-sing-box.txt'; Pattern = 'sing-box version (\d+\.\d+\.\d+)' })) {
     # При равных версиях остаётся уже установленное ядро (оно первое в списке).
     $best = $null
-    foreach ($dir in @($cores) + @($legacies | ForEach-Object { Join-Path $_.Target 'cores' }) + @($bundled)) {
+    foreach ($dir in @($cores, $bundled)) {
         $version = Get-CoreVersion (Join-Path $dir $core.Exe) $core.Pattern
         if ($version -and (-not $best -or $version -gt $best.Version)) { $best = @{ Dir = $dir; Version = $version } }
     }
@@ -133,7 +106,7 @@ $versions = foreach ($core in @(
         $license = Join-Path $best.Dir $core.License
         if (Test-Path $license) { Copy-Item $license $cores -Force }
     }
-    $from = if ($best.Dir -eq $cores) { 'установленное' } elseif ($best.Dir -eq $bundled) { 'из комплекта' } else { 'из прежней установки' }
+    $from = if ($best.Dir -eq $cores) { 'установленное' } else { 'из комплекта' }
     Write-Host "Ядро $($core.Title) $($best.Version) ($from)"
     "$($core.Title) $($best.Version)"
 }
@@ -148,15 +121,6 @@ foreach ($geo in 'geoip.dat', 'geosite.dat') {
 }
 $versions | Set-Content (Join-Path $cores 'VERSIONS.txt') -Encoding utf8
 if (Test-Path $bundled) { Remove-Item $bundled -Recurse -Force }
-foreach ($old in $legacies) {
-    # Базы geoip/geosite прежней установки (их могло обновить приложение) — если своих ещё нет.
-    foreach ($geo in 'geoip.dat', 'geosite.dat') {
-        $from = Join-Path $old.Target "cores\$geo"
-        if ((Test-Path $from) -and -not (Test-Path (Join-Path $cores $geo))) { Copy-Item $from $cores -Force }
-    }
-    if (Test-Path $old.Target) { Remove-Item $old.Target -Recurse -Force }
-    if (Test-Path $old.DataDir) { Remove-Item $old.DataDir -Recurse -Force }
-}
 
 # ── Ярлык в меню «Пуск» для всех пользователей ──
 $app = Join-Path $Target 'CupOfTea.exe'

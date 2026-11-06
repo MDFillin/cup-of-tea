@@ -1,5 +1,5 @@
 ﻿; Установщик The Cup of Tea: один exe, один запрос UAC. Собирается scripts\build-setup.ps1 из комплекта out\CupOfTea.
-; Файлы копирует Inno, а службу, брандмауэр, ярлык, выбор ядер и перенос установки PVpn делает install.ps1 —
+; Файлы копирует Inno, а службу, брандмауэр, ярлык и выбор ядер делает install.ps1 —
 ; тот же скрипт, что и при ручной установке. Удаление — uninstall.ps1 (служба возвращает сеть), затем Inno удаляет папку.
 
 #ifndef AppVersion
@@ -10,15 +10,15 @@
 #endif
 
 [Setup]
-; Не менять: по AppId Windows находит установленную программу при обновлении.
-AppId={{2C59343E-7C14-469F-B429-ABD7B09B9D63}
+; Не менять: по AppId Windows находит установленную программу при обновлении. Свой с 0.7.3: прежний достался от клиента,
+; с которого начинался код, и установка одного затирала другой (запись прежнего снимает RemoveOldUninstallEntry).
+AppId={{6271B140-7746-4A79-9A65-4A5E040BD4C7}
 AppName=The Cup of Tea
 AppVersion={#AppVersion}
 AppVerName=The Cup of Tea {#AppVersion}
 AppPublisher=The Cup of Tea
 VersionInfoVersion={#AppVersion}
 DefaultDirName={autopf}\The Cup of Tea
-; После переименования из Tempest VPN ставим в новую папку; прежнюю снимает install.ps1.
 UsePreviousAppDir=no
 DisableProgramGroupPage=yes
 DisableReadyPage=yes
@@ -59,8 +59,36 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+const
+  // Запись «Приложений» с прежним AppId (до 0.7.3). С тем же AppId ставился и клиент, с которого начинался код,
+  // поэтому снимаем её, только если это The Cup of Tea в этой же папке, — чужую запись не трогаем.
+  OldUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{2C59343E-7C14-469F-B429-ABD7B09B9D63}_is1';
+
 var
   InstallOk: Boolean;
+
+// Программа уже стоит под новым AppId в той же папке: прежняя запись и её деинсталлятор (unins000) больше не нужны.
+procedure RemoveOldUninstallEntry;
+var
+  Name, Location, Uninstaller: String;
+begin
+  if not RegQueryStringValue(HKLM, OldUninstallKey, 'DisplayName', Name) or
+     not RegQueryStringValue(HKLM, OldUninstallKey, 'InstallLocation', Location) then
+    exit;
+  if (CompareText(Name, 'The Cup of Tea') <> 0) or
+     (CompareText(RemoveBackslashUnlessRoot(Location), ExpandConstant('{app}')) <> 0) then
+    exit;
+  if RegQueryStringValue(HKLM, OldUninstallKey, 'UninstallString', Uninstaller) then
+  begin
+    Uninstaller := RemoveQuotes(Uninstaller);
+    if CompareText(Uninstaller, ExpandConstant('{uninstallexe}')) <> 0 then
+    begin
+      DeleteFile(Uninstaller);
+      DeleteFile(ChangeFileExt(Uninstaller, '.dat'));
+    end;
+  end;
+  RegDeleteKeyIncludingSubkeys(HKLM, OldUninstallKey);
+end;
 
 function PowerShell(const Params: String): Integer;
 begin
@@ -84,6 +112,7 @@ var
 begin
   if CurStep <> ssPostInstall then
     exit;
+  RemoveOldUninstallEntry;
   WizardForm.StatusLabel.Caption := 'Настройка службы, брандмауэра и ядер…';
   Log := ExpandConstant('{app}\install.log');
   Code := PowerShell('-File "' + ExpandConstant('{app}\install.ps1') + '" -Source "' + ExpandConstant('{app}') +

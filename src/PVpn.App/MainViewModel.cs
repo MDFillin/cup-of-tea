@@ -238,7 +238,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         TunStack = TunStackChoices.Contains(settings.TunStack) ? settings.TunStack : "gvisor";
         Notifications = settings.Notifications;
         HotkeyText = settings.Hotkey;
-        StartWithWindows = MigrateAutostart() || Registry.CurrentUser.OpenSubKey(AutostartKey)?.GetValue(Product.Id) != null;
+        StartWithWindows = Registry.CurrentUser.OpenSubKey(AutostartKey)?.GetValue(Product.Id) != null;
         LoadRoutingSettings();
         loadingSettings = false;
 
@@ -1290,30 +1290,6 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (int.TryParse(value, out var mtu) && mtu is >= 1280 and <= 1500)
             SaveSettings();
-    }
-
-    /// <summary>Автозапуск, включённый до переименования (значения «TempestVPN» и «PVpn» вели на старый exe), — на новое имя.</summary>
-    private static bool MigrateAutostart()
-    {
-        try
-        {
-            using var key = Registry.CurrentUser.CreateSubKey(AutostartKey);
-            var found = false;
-            foreach (var legacy in Product.LegacyIds)
-            {
-                if (key.GetValue(legacy) == null)
-                    continue;
-                key.DeleteValue(legacy, throwOnMissingValue: false);
-                found = true;
-            }
-            if (found)
-                key.SetValue(Product.Id, $"\"{Environment.ProcessPath}\" --tray");
-            return found;
-        }
-        catch (Exception e) when (e is UnauthorizedAccessException or IOException)
-        {
-            return false;
-        }
     }
 
     partial void OnStartWithWindowsChanged(bool value)
