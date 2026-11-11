@@ -1,0 +1,28 @@
+<UserControl x:Class="PVpn.App.Pages.LogPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:PVpn.App"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:MainViewModel}">
+    <!-- ───────── Журнал ───────── -->
+    <DockPanel Margin="40,0,40,16" local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=4}">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="Журнал" Style="{StaticResource H1}" />
+            <TextBlock Text="Сообщения программы, службы и ядер — без ключей и ссылок" Style="{StaticResource Sub}" FontSize="14" />
+        </StackPanel>
+        <WrapPanel DockPanel.Dock="Top" Margin="0,16,0,12">
+            <ui:Button Content="Копировать" Icon="{ui:SymbolIcon Copy24}" Command="{Binding CopyLogsCommand}" />
+            <ui:Button Content="Восстановить сеть" Icon="{ui:SymbolIcon Wrench24}" Margin="8,0,0,0" Command="{Binding RepairCommand}"
+                       ToolTip="Отключиться и вернуть маршруты, kill switch, DNS и системный прокси к исходным" />
+            <ui:Button Content="Сохранить диагностику" Icon="{ui:SymbolIcon DocumentArrowDown24}" Margin="8,0,0,0" Command="{Binding SaveDiagnosticsCommand}"
+                       ToolTip="Архив на рабочем столе: журналы, сеть, настройки и серверы — без ключей. Его можно отправить тому, кто помогает разобраться." />
+        </WrapPanel>
+        <TextBox x:Name="LogBox" Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                 FontFamily="Cascadia Mono, Consolas" FontSize="12.5" TextWrapping="NoWrap"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                 VerticalContentAlignment="Top" TextChanged="LogBox_TextChanged" IsVisibleChanged="LogBox_IsVisibleChanged" />
+    </DockPanel>
+</UserControl>

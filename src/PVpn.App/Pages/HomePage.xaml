@@ -1,0 +1,342 @@
+<UserControl x:Class="PVpn.App.Pages.HomePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:PVpn.App"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:MainViewModel}">
+    <!-- ───────── Главная ───────── -->
+    <Grid local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=0}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Мягкое свечение цвета состояния за кнопкой -->
+        <Ellipse Grid.RowSpan="3" Width="640" Height="520" VerticalAlignment="Top" Margin="0,-40,0,0" IsHitTestVisible="False"
+                 Fill="{Binding StateBrush}" local:Motion.FadeOnChange="{Binding State}">
+            <Ellipse.OpacityMask>
+                <RadialGradientBrush>
+                    <GradientStop Color="#22FFFFFF" Offset="0" />
+                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                </RadialGradientBrush>
+            </Ellipse.OpacityMask>
+            <Ellipse.Style>
+                <Style TargetType="Ellipse">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding State}" Value="Off"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Ellipse.Style>
+        </Ellipse>
+
+        <!-- Объявление панели подписки (announce) -->
+        <Border Grid.Row="0" Grid.RowSpan="2" VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="640" Margin="40,48,40,0"
+                Style="{StaticResource Card}" Padding="16,10" BorderBrush="{StaticResource AccentGradient}" BorderThickness="1"
+                Visibility="{Binding AnnounceText, Converter={x:Static local:EmptyToCollapsed.Instance}}">
+            <DockPanel>
+                <ui:Button DockPanel.Dock="Right" Icon="{ui:SymbolIcon Dismiss24}" Appearance="Transparent" Padding="6" VerticalAlignment="Top"
+                           ToolTip="Скрыть" AutomationProperties.Name="Скрыть объявление" Command="{Binding DismissAnnounceCommand}" />
+                <ui:Button DockPanel.Dock="Right" Content="Подробнее" Appearance="Transparent" Margin="8,0,4,0" VerticalAlignment="Center"
+                           Command="{Binding OpenLinkCommand}" CommandParameter="{Binding AnnounceUrl}"
+                           Visibility="{Binding AnnounceUrl, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                <ui:SymbolIcon Symbol="Megaphone24" FontSize="20" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding AnnounceText}" TextWrapping="Wrap" VerticalAlignment="Center" MaxHeight="100" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+        </Border>
+
+        <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40,0">
+            <!-- Плашка состояния -->
+            <Grid HorizontalAlignment="Center" local:Motion.FadeOnChange="{Binding State}">
+                <Border CornerRadius="14" Background="{Binding StateBrush}" Opacity="0.14" />
+                <StackPanel Orientation="Horizontal" Margin="12,5">
+                    <Ellipse Width="8" Height="8" Fill="{Binding StateBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding StateLabel}" FontWeight="SemiBold" Foreground="{Binding StateBrush}" Margin="8,0,0,0" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding BigStatus}" local:Motion.FadeOnChange="{Binding State}" FontFamily="{StaticResource Display}" FontSize="42" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,6,0,0" />
+            <TextBlock Text="{Binding StatusDetail}" Foreground="{StaticResource Text2}" HorizontalAlignment="Center" TextAlignment="Center"
+                       TextWrapping="Wrap" MaxWidth="560"
+                       Visibility="{Binding StatusDetail, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+
+            <!-- Кнопка питания: цвет — по состоянию. Заливки лежат друг над другом и плавно сменяются;
+                 при подключении крутится дуга, при успешном подключении расходится волна. -->
+            <Button x:Name="PowerButton" Command="{Binding ToggleConnectCommand}" Margin="0,14,0,10" Cursor="Hand" HorizontalAlignment="Center"
+                    AutomationProperties.Name="{Binding ConnectButtonText}" local:Motion.PressScale="0.94">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="Root" Width="210" Height="210" Background="Transparent">
+                            <Ellipse x:Name="Ripple" Stroke="{StaticResource Accent}" StrokeThickness="2" Opacity="0" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                                <Ellipse.RenderTransform><ScaleTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="Ring1" Stroke="{StaticResource Line}" StrokeThickness="1" />
+                            <Ellipse x:Name="Ring2" Margin="16" Stroke="{StaticResource Line}" StrokeThickness="1.5" />
+                            <Ellipse x:Name="Spinner" Margin="16" Stroke="#F5B544" StrokeThickness="2.5" StrokeDashArray="18 60" StrokeDashCap="Round"
+                                     Opacity="0" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                                <Ellipse.RenderTransform><RotateTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="Disc" Margin="32" Fill="{StaticResource HeroOff}" Effect="{StaticResource HeroOffGlow}" />
+                            <Ellipse x:Name="DiscOn" Margin="32" Fill="{StaticResource HeroOn}" Effect="{StaticResource HeroOnGlow}" Opacity="0" />
+                            <Ellipse x:Name="DiscBusy" Margin="32" Fill="{StaticResource HeroBusy}" Effect="{StaticResource HeroBusyGlow}" Opacity="0" />
+                            <Ellipse x:Name="DiscError" Margin="32" Fill="{StaticResource HeroError}" Effect="{StaticResource HeroErrorGlow}" Opacity="0" />
+                            <ui:SymbolIcon x:Name="Icon" Symbol="Power24" FontSize="58" Foreground="{StaticResource Text1}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding State}" Value="On">
+                                <Setter TargetName="Ring1" Property="Stroke" Value="#334ADE80" />
+                                <Setter TargetName="Ring2" Property="Stroke" Value="#77A3E635" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource OnAccent}" />
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DiscOn" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+                                            <DoubleAnimation Storyboard.TargetName="Ripple" Storyboard.TargetProperty="Opacity" From="0.7" To="0" Duration="0:0:0.7" />
+                                            <DoubleAnimation Storyboard.TargetName="Ripple" Storyboard.TargetProperty="RenderTransform.ScaleX" From="0.8" To="1.35" Duration="0:0:0.7">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="Ripple" Storyboard.TargetProperty="RenderTransform.ScaleY" From="0.8" To="1.35" Duration="0:0:0.7">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DiscOn" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding State}" Value="Busy">
+                                <Setter TargetName="Ring1" Property="Stroke" Value="#33F5B544" />
+                                <Setter TargetName="Ring2" Property="Stroke" Value="#22F5B544" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource OnAccent}" />
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DiscBusy" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+                                            <DoubleAnimation Storyboard.TargetName="Spinner" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                    <!-- Дуга крутится только пока идёт подключение или отключение -->
+                                    <BeginStoryboard x:Name="Spin">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Spinner" Storyboard.TargetProperty="RenderTransform.Angle"
+                                                             From="0" To="360" Duration="0:0:1.1" RepeatBehavior="Forever" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <StopStoryboard BeginStoryboardName="Spin" />
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DiscBusy" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
+                                            <DoubleAnimation Storyboard.TargetName="Spinner" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding State}" Value="Error">
+                                <Setter TargetName="Ring1" Property="Stroke" Value="#33F87171" />
+                                <Setter TargetName="Ring2" Property="Stroke" Value="#55F87171" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource OnAccent}" />
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DiscError" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DiscError" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Ring1" Property="StrokeThickness" Value="2" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- Режим -->
+            <Border Style="{StaticResource SegmentBox}" HorizontalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Style="{StaticResource Segment}" GroupName="Mode" IsChecked="{Binding IsTunMode}" IsEnabled="{Binding CanChangeMode}"
+                                 AutomationProperties.Name="Весь трафик (TUN)" ToolTip="Весь трафик компьютера идёт через VPN (нужна служба The Cup of Tea)">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Globe24" FontSize="16" />
+                            <TextBlock Text="Весь трафик (TUN)" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource Segment}" GroupName="Mode" IsChecked="{Binding IsProxyMode}" IsEnabled="{Binding CanChangeMode}"
+                                 AutomationProperties.Name="Только прокси" ToolTip="Через VPN идут только программы, которые используют системный прокси">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Window24" FontSize="16" />
+                            <TextBlock Text="Только прокси" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+            </Border>
+
+            <ui:Button Content="Войти в сеть (гостиница, кафе)" Icon="{ui:SymbolIcon Globe24}" Margin="0,14,0,0" HorizontalAlignment="Center"
+                       Appearance="Primary" Command="{Binding LoginToNetworkCommand}"
+                       Visibility="{Binding ShowNetworkLogin, Converter={StaticResource BoolToVisibility}}"
+                       ToolTip="Сеть со страницей входа: VPN отключится, откроется страница входа, после входа VPN подключится сам" />
+            <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,10,0,0" MaxWidth="560">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel HorizontalAlignment="Center">
+                            <ui:Button DockPanel.Dock="Right" Icon="{ui:SymbolIcon Dismiss16}" Appearance="Transparent" Padding="4" Margin="6,0,0,0" VerticalAlignment="Center"
+                                       Command="{Binding DataContext.DismissWarningCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                       CommandParameter="{Binding}" ToolTip="Скрыть" AutomationProperties.Name="Скрыть предупреждение" />
+                            <TextBlock Text="{Binding StringFormat=⚠ {0}}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Foreground="{x:Static local:StatusBrushes.Busy}" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <!-- Сторонний антивирус может тормозить VPN (MainViewModel.Antivirus) -->
+            <Border Margin="0,10,0,0" MaxWidth="560" Padding="14,10" CornerRadius="10" Background="{StaticResource Surface2}"
+                    Visibility="{Binding AntivirusHint, Converter={x:Static local:EmptyToCollapsed.Instance}}">
+                <StackPanel>
+                    <TextBlock Text="{Binding AntivirusHint}" TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource Text2}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <ui:Button Content="Открыть папку ядер" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding OpenCoresFolderCommand}" Padding="10,5" />
+                        <ui:Button Content="Понятно, скрыть" Appearance="Transparent" Command="{Binding DismissAntivirusHintCommand}" Margin="8,0,0,0" Padding="10,5" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <StackPanel Margin="0,4,0,0" MaxWidth="560" Visibility="{Binding IsTunMode, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding ServiceNotice}" TextWrapping="Wrap" TextAlignment="Center" FontSize="13" Foreground="{x:Static local:StatusBrushes.Busy}"
+                           Visibility="{Binding ServiceNotice, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                <ui:Button Content="Установить службу" Icon="{ui:SymbolIcon Shield24}" Margin="0,8,0,0" HorizontalAlignment="Center"
+                           Command="{Binding InstallServiceCommand}"
+                           Visibility="{Binding CanInstallService, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Сервер и цифры -->
+        <StackPanel Grid.Row="2" Margin="40,0,40,24">
+            <Border Style="{StaticResource Card}" Padding="16,14" DataContext="{Binding CurrentServer}"
+                    Visibility="{Binding Converter={x:Static local:NullToCollapsed.Instance}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ContentControl Style="{StaticResource Badge}" Content="{Binding Badge}" />
+                    <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
+                        <TextBlock local:FlagText.Text="{Binding DisplayName}" Style="{StaticResource Title}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Details}" Style="{StaticResource Sub}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <!-- Задержка: при подключении — от службы, иначе из последней проверки -->
+                    <TextBlock Grid.Column="2" Text="{Binding DelayText}" FontSize="15" FontWeight="SemiBold" Foreground="{Binding DelayBrush}"
+                               VerticalAlignment="Center" Margin="0,0,20,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding DataContext.State, RelativeSource={RelativeSource AncestorType=Window}}" Value="On">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0"
+                                DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="On">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <Ellipse Width="8" Height="8" Fill="{x:Static local:StatusBrushes.On}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding DelayText}" FontSize="15" FontWeight="SemiBold" Foreground="{x:Static local:StatusBrushes.On}" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <ui:Button Grid.Column="3" Content="Сменить" VerticalAlignment="Center"
+                               Command="{Binding DataContext.GoToCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="1"
+                               ToolTip="Список серверов" />
+                </Grid>
+            </Border>
+
+            <UniformGrid Columns="4" local:Motion.FadeInOnShow="True" Margin="-6,12,-6,0">
+                <UniformGrid.Style>
+                    <Style TargetType="UniformGrid">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding State}" Value="On">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </UniformGrid.Style>
+                <Border Style="{StaticResource Card}" Padding="16,12" Margin="6,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="ArrowDown24" FontSize="16" Foreground="{StaticResource Accent}" />
+                            <TextBlock Text="Загрузка" Style="{StaticResource StatLabel}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource StatValue}">
+                            <Run Text="{Binding DownSpeed, Mode=OneWay, Converter={x:Static local:ValuePart.Instance}, ConverterParameter=value}" /><Run
+                                 Text="{Binding DownSpeed, Mode=OneWay, Converter={x:Static local:ValuePart.Instance}, ConverterParameter=unit}" FontSize="14" FontWeight="Normal" Foreground="{StaticResource Text2}" />
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Padding="16,12" Margin="6,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="ArrowUp24" FontSize="16" Foreground="{StaticResource Up}" />
+                            <TextBlock Text="Отдача" Style="{StaticResource StatLabel}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource StatValue}">
+                            <Run Text="{Binding UpSpeed, Mode=OneWay, Converter={x:Static local:ValuePart.Instance}, ConverterParameter=value}" /><Run
+                                 Text="{Binding UpSpeed, Mode=OneWay, Converter={x:Static local:ValuePart.Instance}, ConverterParameter=unit}" FontSize="14" FontWeight="Normal" Foreground="{StaticResource Text2}" />
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Padding="16,12" Margin="6,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="DataUsage24" FontSize="16" Foreground="{StaticResource Text2}" />
+                            <TextBlock Text="За сеанс" Style="{StaticResource StatLabel}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource StatValue}">
+                            <Run Text="{Binding SessionTraffic, Mode=OneWay, Converter={x:Static local:ValuePart.Instance}, ConverterParameter=value}" /><Run
+                                 Text="{Binding SessionTraffic, Mode=OneWay, Converter={x:Static local:ValuePart.Instance}, ConverterParameter=unit}" FontSize="14" FontWeight="Normal" Foreground="{StaticResource Text2}" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding TrafficText}" FontSize="12" Foreground="{StaticResource Text3}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Padding="16,12" Margin="6,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="GlobeLocation24" FontSize="16" Foreground="{StaticResource Text2}" />
+                            <TextBlock Text="Внешний IP" Style="{StaticResource StatLabel}" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding PublicIp, TargetNullValue=—}" Style="{StaticResource StatValue}" FontSize="20" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+            <TextBlock Text="{Binding FooterInfo}" Style="{StaticResource Hint}" Margin="4,10,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                       Visibility="{Binding FooterInfo, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

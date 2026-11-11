@@ -1,0 +1,247 @@
+<UserControl x:Class="PVpn.App.Pages.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:PVpn.App"
+             xmlns:settings="clr-namespace:PVpn.App.Pages.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:MainViewModel}">
+    <!-- ───────── Настройки ───────── -->
+    <ScrollViewer x:Name="SettingsScroll" VerticalScrollBarVisibility="Auto"
+                  local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=3}">
+        <Grid Margin="40,0,40,24">
+            <!-- Список настроек -->
+            <StackPanel local:Motion.FadeInOnShow="True" Visibility="{Binding SettingsPage, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=none}">
+                <TextBlock Text="Настройки" Style="{StaticResource H1}" />
+                <TextBlock Text="Пункты со стрелкой открывают свою страницу" Style="{StaticResource Sub}" FontSize="14" />
+
+                <TextBlock Text="Подключение (со следующего подключения)" Style="{StaticResource GroupTitle}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ShieldLock24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Kill switch" Style="{StaticResource Title}" />
+                                <TextBlock Text="Режим TUN: пока VPN включён или переподключается, интернет мимо туннеля закрыт. Локальная сеть, Radmin и VirtualBox работают." Style="{StaticResource Sub}" />
+                            </StackPanel>
+                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding KillSwitch}" AutomationProperties.Name="Kill switch" VerticalAlignment="Center" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Button Style="{StaticResource RowButton}" Command="{Binding OpenSettingsCommand}" CommandParameter="dns" AutomationProperties.AutomationId="Open_dns" AutomationProperties.Name="DNS">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="GlobeShield24" FontSize="18" /></ContentControl>
+                                <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                    <TextBlock Text="DNS" Style="{StaticResource Title}" />
+                                    <TextBlock Text="Режим TUN: DNS-over-HTTPS через туннель, проверка утечки" Style="{StaticResource Sub}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Dns.Selected}" Style="{StaticResource RowValue}" />
+                                    <ui:SymbolIcon Style="{StaticResource Chevron}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                        <Border Style="{StaticResource Separator}" />
+                        <Button Style="{StaticResource RowButton}" Command="{Binding OpenSettingsCommand}" CommandParameter="bypass" AutomationProperties.AutomationId="Open_bypass" AutomationProperties.Name="Обход блокировок">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ShieldGlobe24" FontSize="18" /></ContentControl>
+                                <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                    <TextBlock Text="Обход блокировок" Style="{StaticResource Title}" />
+                                    <TextBlock Text="Отпечаток TLS, фрагментация, mux, шумы и смена портов Hysteria2" Style="{StaticResource Sub}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Bypass.Summary}" Style="{StaticResource RowValue}" />
+                                    <ui:SymbolIcon Style="{StaticResource Chevron}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                        <Border Style="{StaticResource Separator}" />
+                        <Button Style="{StaticResource RowButton}" Command="{Binding OpenSettingsCommand}" CommandParameter="tun" AutomationProperties.AutomationId="Open_tun" AutomationProperties.Name="Тонкая настройка TUN">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="Wrench24" FontSize="18" /></ContentControl>
+                                <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                    <TextBlock Text="Тонкая настройка TUN" Style="{StaticResource Title}" />
+                                    <TextBlock Text="Блокировка QUIC, MTU, сетевой стек" Style="{StaticResource Sub}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding MtuText, StringFormat=MTU {0}}" Style="{StaticResource RowValue}" />
+                                    <ui:SymbolIcon Style="{StaticResource Chevron}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="Автоматика" Style="{StaticResource GroupTitle}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="PlugConnected24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Подключаться автоматически" Style="{StaticResource Title}" />
+                                <TextBlock Text="При запуске The Cup of Tea и в любой сети, кроме доверенных. Если вы сами включили или выключили VPN, в этой сети автоматика больше не вмешивается." Style="{StaticResource Sub}" />
+                            </StackPanel>
+                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding AutoConnect}" AutomationProperties.Name="Подключаться автоматически" VerticalAlignment="Center" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ArrowSync24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Восстанавливать подключение после перезагрузки" Style="{StaticResource Title}" />
+                                <TextBlock Text="Если VPN был включён, когда компьютер выключили или перезагрузили, The Cup of Tea подключится к тому же серверу после входа в Windows. Не срабатывает, если вы сами отключили VPN или вышли из программы." Style="{StaticResource Sub}" />
+                            </StackPanel>
+                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding ResumeAfterRestart}" AutomationProperties.Name="Восстанавливать подключение после перезагрузки" VerticalAlignment="Center" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Grid Style="{StaticResource Row}" IsEnabled="{Binding CanProtectBeforeLogin}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ShieldLock24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Защита до входа в Windows" Style="{StaticResource Title}" />
+                                <TextBlock Text="Только режим TUN. Служба поднимает VPN при загрузке, ещё до входа в Windows: всё, что стартует раньше вас, тоже идёт через VPN. Сервер хранится зашифрованным, его может прочитать только служба." Style="{StaticResource Sub}" />
+                            </StackPanel>
+                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding ProtectBeforeLogin}" AutomationProperties.Name="Защита до входа в Windows" VerticalAlignment="Center" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="PlugDisconnected24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Отключать VPN в доверенных сетях" Style="{StaticResource Title}" />
+                                <TextBlock Text="Дом, работа — там, где VPN не нужен" Style="{StaticResource Sub}" />
+                            </StackPanel>
+                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding DisconnectOnTrusted}" AutomationProperties.Name="Отключать VPN в доверенных сетях" VerticalAlignment="Center" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Button Style="{StaticResource RowButton}" Command="{Binding OpenSettingsCommand}" CommandParameter="trusted" AutomationProperties.AutomationId="Open_trusted" AutomationProperties.Name="Доверенные сети">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="HomeCheckmark24" FontSize="18" /></ContentControl>
+                                <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                    <TextBlock Text="Доверенные сети" Style="{StaticResource Title}" />
+                                    <TextBlock Text="{Binding CurrentNetworks, StringFormat=Сейчас: {0}}" Style="{StaticResource Sub}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding TrustedNetworks.Count}" Style="{StaticResource RowValue}" />
+                                    <ui:SymbolIcon Style="{StaticResource Chevron}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="Серверы и обновления" Style="{StaticResource GroupTitle}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Button Style="{StaticResource RowButton}" Command="{Binding OpenSettingsCommand}" CommandParameter="subs" AutomationProperties.AutomationId="Open_subs" AutomationProperties.Name="Подписки">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="CloudSync24" FontSize="18" /></ContentControl>
+                                <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                    <TextBlock Text="Подписки" Style="{StaticResource Title}" />
+                                    <TextBlock Text="Серверы из панели (Remnawave, 3x-ui, Marzban), трафик и срок" Style="{StaticResource Sub}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Subscriptions.Count}" Style="{StaticResource RowValue}" />
+                                    <ui:SymbolIcon Style="{StaticResource Chevron}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                        <Border Style="{StaticResource Separator}" />
+                        <Button Style="{StaticResource RowButton}" Command="{Binding OpenSettingsCommand}" CommandParameter="cores" AutomationProperties.AutomationId="Open_cores" AutomationProperties.Name="Ядра">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ArrowDownload24" FontSize="18" /></ContentControl>
+                                <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                    <TextBlock Text="Ядра" Style="{StaticResource Title}" />
+                                    <TextBlock Text="xray и sing-box: версии, обновление с GitHub и откат" Style="{StaticResource Sub}" />
+                                </StackPanel>
+                                <ui:SymbolIcon Grid.Column="2" Style="{StaticResource Chevron}" />
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="Приложение" Style="{StaticResource GroupTitle}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="WindowArrowUp24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Запускать вместе с Windows" Style="{StaticResource Title}" />
+                                <TextBlock Text="Сразу в трей. Служба работает и без окна: это значок в трее и быстрый доступ." Style="{StaticResource Sub}" />
+                            </StackPanel>
+                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding StartWithWindows}" AutomationProperties.Name="Запускать вместе с Windows" VerticalAlignment="Center" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="Alert24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Уведомления" Style="{StaticResource Title}" />
+                                <TextBlock Text="Подключено, связь прервалась и восстановлена, ошибка — у часов, если окно The Cup of Tea не на переднем плане" Style="{StaticResource Sub}" />
+                            </StackPanel>
+                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding Notifications}" AutomationProperties.Name="Уведомления" VerticalAlignment="Center" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="Keyboard24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Горячая клавиша" Style="{StaticResource Title}" />
+                                <TextBlock Text="Подключить или отключить VPN из любой программы. Пусто — выключено." Style="{StaticResource Sub}" />
+                                <TextBlock Text="{Binding HotkeyError}" Foreground="{x:Static local:StatusBrushes.Error}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Visibility="{Binding HotkeyError, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                            </StackPanel>
+                            <ui:TextBox Grid.Column="2" Text="{Binding HotkeyText, UpdateSourceTrigger=PropertyChanged}" Width="170" VerticalAlignment="Center"
+                                        PlaceholderText="Ctrl+Alt+P" AutomationProperties.Name="Горячая клавиша" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ArrowSync24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Title}"><Run Text="Обновления · версия" /> <Run Text="{Binding AppVersion, Mode=OneWay}" /></TextBlock>
+                                <TextBlock Text="Проверяются при запуске и каждые 3 часа; о новой версии придёт уведомление — щелчок по нему ставит её. Установщик берётся только из релизов на GitHub, SHA256 сверяется с опубликованным." Style="{StaticResource Sub}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding UpdateText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Visibility="{Binding UpdateText, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                            </StackPanel>
+                            <ui:Button x:Name="UpdateButton" Grid.Column="2" Content="{Binding UpdateButtonText}" Command="{Binding UpdateAppCommand}" VerticalAlignment="Center"
+                                       AutomationProperties.Name="Обновление программы" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- ── Страницы настроек: заголовок с кнопкой «назад» ── -->
+            <StackPanel local:Motion.FadeInOnShow="True" Visibility="{Binding SettingsPage, Converter={x:Static local:EmptyToCollapsed.Instance}}">
+                <StackPanel Orientation="Horizontal" Margin="-8,0,0,18">
+                    <ui:Button Icon="{ui:SymbolIcon ArrowLeft24}" Appearance="Transparent" Command="{Binding OpenSettingsCommand}" CommandParameter="{x:Null}"
+                               AutomationProperties.Name="Назад к настройкам" ToolTip="Назад к настройкам" VerticalAlignment="Center" />
+                    <TextBlock Style="{StaticResource H1}" Margin="8,0,0,0" VerticalAlignment="Center" Text="{Binding SettingsPage, Converter={x:Static local:SettingsTitle.Instance}}" />
+                </StackPanel>
+
+                <!-- DNS -->
+                <settings:DnsSettings />
+                <!-- Обход блокировок -->
+                <settings:BypassSettings />
+                <!-- Тонкая настройка TUN -->
+                <settings:TunSettings />
+                <!-- Доверенные сети -->
+                <settings:TrustedNetworksSettings />
+                <!-- Подписки -->
+                <settings:SubscriptionsSettings />
+                <!-- Ядра -->
+                <settings:CoresSettings />
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

@@ -11,7 +11,7 @@ Android TV — [`android/`](android/README.md).
 |---|---|
 | `src/PVpn.Core` | Ссылки, подписки, генераторы конфигов xray и sing-box, запуск ядер (stdin, Job Object, Ctrl+C), kill switch (WFP), маршруты, системный прокси (WinINET), профили (DPAPI), клиент службы |
 | `src/PVpn.Service` | Служба `CupOfTea` (LocalSystem): канал `\\.\pipe\cupoftea`, TUN-сессия, kill switch, сторож, смена сети, `--repair` |
-| `src/PVpn.App` | WPF (.NET 10, WPF-UI, MVVM Toolkit), трей, один экземпляр, работает без прав администратора |
+| `src/PVpn.App` | WPF (.NET 10, WPF-UI, MVVM Toolkit), трей, один экземпляр, работает без прав администратора. Окно — `MainWindow.xaml` (меню, сообщения, экран обновления) и страницы `Pages\` (`HomePage`, `ServersPage`, `RoutesPage`, `SettingsPage` с разделами `Pages\Settings\`, `LogPage`); `MainViewModel` разбит на части по темам (`MainViewModel.*.cs`) |
 | `src/PVpn.Cli` | `cupoftea-cli.exe` |
 
 ## Сборка
@@ -109,9 +109,8 @@ cupoftea-cli svc cores [check|update|rollback]
 `e2e-check.ps1` в папке программы — проверки при подключённом TUN.
 
 ## Тестовая ВМ
-`scripts\vm\` (VirtualBox): `create-test-vm.ps1`, `deploy-and-test.ps1`, `fault-test.ps1`, `reboot-test.ps1`,
-`ui-test.ps1`, `split-test.ps1`, `split-ui-test.ps1`, `bypass-test.ps1`, `dns-test.ps1`, `sub-test.ps1`, `e-test.ps1`,
-`f-test.ps1`, `f-portal-vpn-test.ps1`, `g-test.ps1`, `switch-test.ps1`, `h-test.ps1`.
+Режим TUN и kill switch проверяются в виртуальной машине Hyper-V: установщик внутри ВМ, затем `e2e-check.ps1`
+при подключённом TUN. Прежние сценарии для VirtualBox (`scripts\vm`) удалены — они остались в истории git.
 
 ## История версий
 - **0.7.3** — самостоятельность: свой AppId установщика и свои ключи WFP; установка больше не снимает другие клиенты

@@ -1,0 +1,149 @@
+<UserControl x:Class="PVpn.App.Pages.Settings.BypassSettings"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:PVpn.App"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:MainViewModel}">
+    <!-- Обход блокировок -->
+    <StackPanel DataContext="{Binding Bypass}" MaxWidth="760" HorizontalAlignment="Left"
+                Visibility="{Binding DataContext.SettingsPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=bypass}">
+        <StackPanel.Resources>
+            <Style x:Key="FieldLabel" TargetType="TextBlock">
+                <Setter Property="Width" Value="250" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="FieldRow" TargetType="DockPanel">
+                <Setter Property="Margin" Value="0,0,0,8" />
+                <Setter Property="LastChildFill" Value="False" />
+            </Style>
+            <Style x:Key="FieldBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                <Setter Property="Width" Value="170" />
+            </Style>
+            <Style x:Key="Group" TargetType="StackPanel">
+                <Setter Property="Margin" Value="48,0,0,10" />
+            </Style>
+            <Style x:Key="ToggleHint" TargetType="TextBlock" BasedOn="{StaticResource Hint}">
+                <Setter Property="Margin" Value="48,2,0,14" />
+            </Style>
+        </StackPanel.Resources>
+        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14" TextWrapping="Wrap"
+                   Text="Для серверов по ссылкам. У серверов, которые подписка отдаёт полным конфигом, свои настройки обхода (фрагментация, маски) — они не меняются." />
+        <ui:ToggleSwitch Content="Настройки обхода от подписки" Margin="0,0,0,2"
+                         IsChecked="{Binding DataContext.UseSubscriptionBypass, RelativeSource={RelativeSource AncestorType=Window}}" />
+        <TextBlock Style="{StaticResource Hint}" Margin="48,2,0,14" TextWrapping="Wrap"
+                   Text="Если панель присылает фрагментацию и шумы (заголовки fragmentation-*, noises-*), они заменяют настройки ниже для её серверов. Ваши настройки при этом не меняются." />
+        <TextBlock Style="{StaticResource Sub}" Margin="48,-8,0,14" TextWrapping="Wrap" Foreground="{StaticResource Accent}"
+                   Text="{Binding DataContext.SubscriptionBypassSummary, RelativeSource={RelativeSource AncestorType=Window}}"
+                   Visibility="{Binding DataContext.SubscriptionBypassSummary, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,16"
+                   Text="Оба режима, со следующего подключения. Значения по умолчанию подходят большинству сетей. Меняйте, если провайдер начал рвать или тормозить соединения; «Сбросить» вернёт всё как было." />
+
+        <DockPanel Style="{StaticResource FieldRow}">
+            <TextBlock Text="Отпечаток TLS (VLESS)" Style="{StaticResource FieldLabel}" />
+            <ComboBox ItemsSource="{Binding FingerprintChoices}" SelectedItem="{Binding Fingerprint}" Width="170" />
+        </DockPanel>
+        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14"
+                   Text="Каким браузером представляется подключение. «из ссылки» — как задал сервер (обычно chrome)." />
+
+        <DockPanel Style="{StaticResource FieldRow}">
+            <TextBlock Text="Режим XHTTP" Style="{StaticResource FieldLabel}" />
+            <ComboBox ItemsSource="{Binding XhttpModeChoices}" SelectedItem="{Binding XhttpMode}" Width="170" />
+        </DockPanel>
+        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14"
+                   Text="auto подходит почти всегда. packet-up — если соединения XHTTP обрываются через несколько секунд; stream-one — один запрос на соединение." />
+
+        <ui:ToggleSwitch Content="Фрагментация TLS ClientHello (VLESS)" IsChecked="{Binding Fragment}" />
+        <TextBlock Style="{StaticResource ToggleHint}"
+                   Text="Начало TLS-соединения уходит кусками: фильтр провайдера не видит имя сайта и не рвёт REALITY." />
+        <StackPanel Style="{StaticResource Group}" Visibility="{Binding Fragment, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="Что резать (tlshello или 1-3)" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding FragmentPackets, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="Длина куска, байт" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding FragmentLength, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="Пауза между кусками, мс" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding FragmentInterval, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+        </StackPanel>
+
+        <ui:ToggleSwitch Content="Мультиплексирование (mux) для VLESS по TCP" IsChecked="{Binding Mux}" />
+        <TextBlock Style="{StaticResource ToggleHint}"
+                   Text="Несколько соединений программ идут внутри одного соединения с сервером — меньше рукопожатий. У Vision через mux идёт только UDP, у XHTTP mux не используется (у него свой XMUX)." />
+        <StackPanel Style="{StaticResource Group}" Visibility="{Binding Mux, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="Потоков TCP" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding MuxConcurrency, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="Потоков UDP (xudp)" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding XudpConcurrency, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+        </StackPanel>
+
+        <ui:ToggleSwitch Content="Свои параметры XMUX (XHTTP)" IsChecked="{Binding CustomXmux}" />
+        <TextBlock Style="{StaticResource ToggleHint}"
+                   Text="Выключено — как в ссылке, а если там нет — по умолчанию Xray: 3 соединения, каждое на 600–900 запросов и 30–50 минут. Пустое поле — значение Xray." />
+        <StackPanel Style="{StaticResource Group}" Visibility="{Binding CustomXmux, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="Соединений (maxConnections)" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding XmuxMaxConnections, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="или потоков (maxConcurrency)" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding XmuxMaxConcurrency, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="cMaxReuseTimes" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding XmuxCMaxReuseTimes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="hMaxRequestTimes" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding XmuxHMaxRequestTimes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="hMaxReusableSecs" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding XmuxHMaxReusableSecs, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="hKeepAlivePeriod, с" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding XmuxHKeepAlivePeriod, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+        </StackPanel>
+
+        <ui:ToggleSwitch Content="Шумы перед подключением Hysteria2" IsChecked="{Binding Noises}" />
+        <TextBlock Style="{StaticResource ToggleHint}"
+                   Text="Перед первым пакетом QUIC уходят мусорные данные — фильтру провайдера сложнее узнать Hysteria2." />
+        <StackPanel Style="{StaticResource Group}" Visibility="{Binding Noises, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="Тип" Style="{StaticResource FieldLabel}" Width="202" />
+                <ComboBox ItemsSource="{Binding NoiseTypeChoices}" SelectedItem="{Binding NoiseType}" Width="170" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="{Binding NoisePacketLabel}" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding NoisePacket, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+            <DockPanel Style="{StaticResource FieldRow}">
+                <TextBlock Text="Пауза после шума, мс" Style="{StaticResource FieldLabel}" Width="202" />
+                <TextBox Text="{Binding NoiseDelay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+            </DockPanel>
+        </StackPanel>
+
+        <DockPanel Style="{StaticResource FieldRow}">
+            <TextBlock Text="Смена портов Hysteria2, раз в N с" Style="{StaticResource FieldLabel}" />
+            <TextBox Text="{Binding HopInterval, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldBox}" />
+        </DockPanel>
+        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14"
+                   Text="Только если в ссылке hy2 диапазон портов (host:20000-30000 или mport=…) и сервер слушает весь диапазон." />
+
+        <TextBlock Text="{Binding Error}" Foreground="{x:Static local:StatusBrushes.Error}" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Visibility="{Binding Error, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+        <ui:Button Content="Сбросить по умолчанию" Icon="{ui:SymbolIcon ArrowReset24}" Command="{Binding ResetCommand}" />
+    </StackPanel>
+</UserControl>

@@ -1,12 +1,14 @@
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Media;
 using Wpf.Ui.Controls;
 
 namespace PVpn.App;
 
+/// <summary>
+/// Окно: боковое меню, страницы (Pages\*: главная, серверы, маршруты, настройки, журнал), строка сообщений и экран
+/// обязательного обновления. Состояние — в MainViewModel, поэтому окно можно закрыть и создать заново (см. App).
+/// </summary>
 public partial class MainWindow : FluentWindow
 {
     /// <summary>Размер, под который нарисован интерфейс: окно больше — всё крупнее.</summary>
@@ -17,7 +19,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>true — закрыть окно по-настоящему (выход из приложения), иначе окно прячется в трей.</summary>
     public bool AllowClose { get; set; }
 
-    /// <summary>Окно впервые спрятали в трей (показать подсказку один раз).</summary>
+    /// <summary>Окно спрятали в трей.</summary>
     public event Action? HiddenToTray;
 
     public MainWindow(MainViewModel vm)
@@ -53,48 +55,5 @@ public partial class MainWindow : FluentWindow
         vm.SettingsPage = settingsPage;
     }
 
-    private void LogBox_TextChanged(object sender, TextChangedEventArgs e) => ((System.Windows.Controls.TextBox)sender).ScrollToEnd();
-
-    // Пока страница скрыта, прокрутка не работает: листаем к концу, когда её открыли.
-    private void LogBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
-    {
-        if (e.NewValue is true)
-            Dispatcher.BeginInvoke(((System.Windows.Controls.TextBox)sender).ScrollToEnd, System.Windows.Threading.DispatcherPriority.Loaded);
-    }
-
-    /// <summary>Два щелчка по серверу быстрее этого — подключиться к нему или переключиться (системный интервал бывает до 900 мс).</summary>
-    private const int DoubleClickMs = 350;
-    private ProfileItem? lastClickItem;
-    private long lastClickAt;
-
-    /// <summary>Быстрый двойной щелчок по серверу: подключиться к нему или переключиться, если VPN уже включён.</summary>
-    private async void ServerList_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (ItemsControl.ContainerFromElement(ServerList, (DependencyObject)e.OriginalSource) is not ListBoxItem { DataContext: ProfileItem item })
-            return;
-        var now = Environment.TickCount64;
-        if (item == lastClickItem && now - lastClickAt <= DoubleClickMs)
-        {
-            lastClickItem = null;
-            await vm.SwitchServerAsync(item.Profile.Id, connectIfOff: true);
-            return;
-        }
-        lastClickItem = item;
-        lastClickAt = now;
-    }
-
-    /// <summary>Щелчок по заголовку группы серверов: свернуть или развернуть её (и запомнить).</summary>
-    private void GroupToggle_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.Primitives.ToggleButton { DataContext: CollectionViewGroup { Name: string group } } toggle)
-            vm.SetGroupExpanded(group, toggle.IsChecked == true);
-    }
-
     private void DismissNotice_Click(object sender, RoutedEventArgs e) => vm.Notice = null;
-
-    private void DomainBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key == System.Windows.Input.Key.Enter)
-            vm.Split.AddDomainCommand.Execute(null);
-    }
 }

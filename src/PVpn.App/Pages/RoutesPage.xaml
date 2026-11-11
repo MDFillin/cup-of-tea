@@ -1,0 +1,188 @@
+<UserControl x:Class="PVpn.App.Pages.RoutesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:PVpn.App"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:MainViewModel}">
+    <!-- ───────── Маршруты (раздельное туннелирование) ───────── -->
+    <Grid Margin="40,0,40,16" DataContext="{Binding Split}"
+          local:Motion.FadeInOnShow="True" Visibility="{Binding DataContext.Page, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=2}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="Маршруты" Style="{StaticResource H1}" />
+            <TextBlock Text="Какие программы и сайты идут через VPN, а какие напрямую. Изменения можно применить без переподключения." Style="{StaticResource Sub}" FontSize="14" />
+            <Border Style="{StaticResource Card}" Padding="20,12" Margin="0,16,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Маршруты из подписки" FontFamily="{StaticResource Display}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" TextWrapping="Wrap"
+                                   Text="Для серверов, которые панель отдаёт полным конфигом: их маршруты (например, российские сайты напрямую), DNS и автовыбор. Ваши правила ниже — главнее. Выключено — всё через сервер. Со следующего подключения." />
+                    </StackPanel>
+                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" AutomationProperties.Name="Маршруты из подписки"
+                                     IsChecked="{Binding DataContext.UseServerRouting, RelativeSource={RelativeSource AncestorType=Window}}" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource Card}" Padding="20,12" Margin="0,12,0,0">
+                <StackPanel>
+                    <DockPanel>
+                        <ui:Button DockPanel.Dock="Right" Content="Из буфера" Icon="{ui:SymbolIcon ClipboardPaste24}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                   ToolTip="Профиль маршрутизации из буфера обмена: JSON, base64 или ссылка …://routing/onadd/…"
+                                   Command="{Binding DataContext.ImportRoutingCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        <ComboBox DockPanel.Dock="Right" MinWidth="300" VerticalAlignment="Center" AutomationProperties.Name="Профиль маршрутизации"
+                                  ItemsSource="{Binding DataContext.RoutingChoices, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Title" SelectedValuePath="Key"
+                                  SelectedValue="{Binding DataContext.RoutingChoice, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        <TextBlock Text="Профиль маршрутизации" FontFamily="{StaticResource Display}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource Sub}" Margin="0,6,0,0" Text="{Binding DataContext.RoutingSummary, RelativeSource={RelativeSource AncestorType=Window}}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="20,16" Margin="0,16,0,0">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Раздельное туннелирование" FontFamily="{StaticResource Display}" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Когда выключено, весь трафик идёт через VPN" Style="{StaticResource Sub}" />
+                    </StackPanel>
+                    <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Enabled}" AutomationProperties.Name="Раздельное туннелирование" VerticalAlignment="Center" />
+                </Grid>
+                <Border Style="{StaticResource SegmentBox}" Background="{StaticResource Bg}" Margin="0,14,0,0">
+                    <UniformGrid Columns="2">
+                        <RadioButton Style="{StaticResource Segment}" Content="Всё через VPN, кроме выбранного" IsChecked="{Binding IsExcludeMode}" GroupName="SplitMode" />
+                        <RadioButton Style="{StaticResource Segment}" Content="Через VPN только выбранное" IsChecked="{Binding IsOnlyMode}" GroupName="SplitMode" />
+                    </UniformGrid>
+                </Border>
+                <TextBlock Text="⚠ Список пуст — пока ничего не выбрано, весь трафик идёт напрямую, без VPN." Margin="0,8,0,0"
+                           Foreground="{x:Static local:StatusBrushes.Busy}"
+                           Visibility="{Binding AllDirectWarning, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="2*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Программы -->
+            <Border Style="{StaticResource Card}" Padding="16,14">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" FontSize="16" FontWeight="SemiBold">
+                        <Run Text="Программы" /><Run Text="  " /><Run Text="{Binding ListTitle, Mode=OneWay}" FontWeight="Normal" FontSize="14" Foreground="{StaticResource Text2}" />
+                    </TextBlock>
+                    <WrapPanel DockPanel.Dock="Top" Margin="0,12,0,8">
+                        <ui:Button Content="Программа…" Icon="{ui:SymbolIcon Apps24}" Margin="0,0,8,0" Command="{Binding AddExeCommand}" />
+                        <ui:Button Content="Папка…" Icon="{ui:SymbolIcon Folder24}" Margin="0,0,8,0" Command="{Binding AddFolderCommand}"
+                                   ToolTip="Все программы внутри папки, в том числе после обновления (Discord меняет имя файла)" />
+                        <ui:Button Content="Из запущенных…" Icon="{ui:SymbolIcon AppsList24}" Command="{Binding AddRunningCommand}" />
+                    </WrapPanel>
+                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Hint}"
+                               Text="Папка — под правило попадают все программы внутри, даже после обновления. В режиме «Только прокси» правила для программ не действуют, только для сайтов." />
+                    <ListBox ItemsSource="{Binding Apps}" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:SplitAppItem}">
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ContentControl Style="{StaticResource IconBox}">
+                                        <ui:SymbolIcon FontSize="18" Foreground="{StaticResource Text2}">
+                                            <ui:SymbolIcon.Style>
+                                                <Style TargetType="ui:SymbolIcon">
+                                                    <Setter Property="Symbol" Value="Apps24" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                                            <Setter Property="Symbol" Value="Folder24" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ui:SymbolIcon.Style>
+                                        </ui:SymbolIcon>
+                                    </ContentControl>
+                                    <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" ToolTip="{Binding App.Path}">
+                                        <TextBlock Text="{Binding Name}" Style="{StaticResource Title}" />
+                                        <TextBlock Text="{Binding Details}" Style="{StaticResource Sub}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="2" Icon="{ui:SymbolIcon Dismiss24}" Appearance="Transparent" Padding="6"
+                                               ToolTip="Убрать из списка" AutomationProperties.Name="Убрать из списка"
+                                               Command="{Binding DataContext.RemoveAppCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                               CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Сайты -->
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16,14">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" FontSize="16" FontWeight="SemiBold">
+                        <Run Text="Сайты" /><Run Text="  " /><Run Text="{Binding ListTitle, Mode=OneWay}" FontWeight="Normal" FontSize="14" Foreground="{StaticResource Text2}" />
+                    </TextBlock>
+                    <Grid DockPanel.Dock="Top" Margin="0,12,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox x:Name="DomainBox" PlaceholderText="например, gosuslugi.ru"
+                                    Text="{Binding NewDomain, UpdateSourceTrigger=PropertyChanged}" KeyDown="DomainBox_KeyDown" />
+                        <ui:Button Grid.Column="1" Icon="{ui:SymbolIcon Add24}" Appearance="Primary" Margin="8,0,0,0" Command="{Binding AddDomainCommand}" ToolTip="Добавить сайт"
+                                   AutomationProperties.Name="Добавить сайт" />
+                    </Grid>
+                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Hint}" Text="Правило действует и на все поддомены. «ru» — все сайты в зоне .ru." />
+                    <ListBox ItemsSource="{Binding Domains}" HorizontalContentAlignment="Stretch" Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:SymbolIcon Symbol="Globe24" FontSize="18" Foreground="{StaticResource Text2}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding}" FontSize="15" Margin="12,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <ui:Button Grid.Column="2" Icon="{ui:SymbolIcon Dismiss24}" Appearance="Transparent" Padding="6"
+                                               ToolTip="Убрать из списка" AutomationProperties.Name="Убрать из списка"
+                                               Command="{Binding DataContext.RemoveDomainCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                               CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Правила поменяли при включённом VPN -->
+        <Border Grid.Row="3" Margin="0,12,0,0" Padding="16,10" CornerRadius="10" Background="{StaticResource Surface2}"
+                Visibility="{Binding DataContext.SplitPending, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+                <ui:Button DockPanel.Dock="Right" Content="Применить сейчас" Appearance="Primary"
+                           Command="{Binding DataContext.ApplySplitCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                <TextBlock Text="Правила изменились. Применить к текущему подключению?" VerticalAlignment="Center" TextWrapping="Wrap" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>
