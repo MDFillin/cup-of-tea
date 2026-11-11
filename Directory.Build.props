@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>0.7.3</Version>
+    <Version>0.8.0</Version>
     <Company>The Cup of Tea</Company>
     <Product>The Cup of Tea</Product>
   </PropertyGroup>
