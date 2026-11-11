@@ -20,7 +20,7 @@
                  FontSize="14">
     <Grid Background="{StaticResource Bg}">
         <!-- Всё содержимое растёт вместе с окном (масштаб задаёт MainWindow.xaml.cs) -->
-        <Border x:Name="Scaled">
+        <Border x:Name="Scaled" IsEnabled="{Binding IsUsable}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="236" />
@@ -306,6 +306,17 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <!-- Сторонний антивирус может тормозить VPN (MainViewModel.Antivirus) -->
+                            <Border Margin="0,10,0,0" MaxWidth="560" Padding="14,10" CornerRadius="10" Background="{StaticResource Surface2}"
+                                    Visibility="{Binding AntivirusHint, Converter={x:Static local:EmptyToCollapsed.Instance}}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding AntivirusHint}" TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource Text2}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <ui:Button Content="Открыть папку ядер" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding OpenCoresFolderCommand}" Padding="10,5" />
+                                        <ui:Button Content="Понятно, скрыть" Appearance="Transparent" Command="{Binding DismissAntivirusHintCommand}" Margin="8,0,0,0" Padding="10,5" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                             <StackPanel Margin="0,4,0,0" MaxWidth="560" Visibility="{Binding IsTunMode, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Text="{Binding ServiceNotice}" TextWrapping="Wrap" TextAlignment="Center" FontSize="13" Foreground="{x:Static local:StatusBrushes.Busy}"
                                            Visibility="{Binding ServiceNotice, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
@@ -827,6 +838,26 @@
                                         <Border Style="{StaticResource Separator}" />
                                         <Grid Style="{StaticResource Row}">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ArrowSync24" FontSize="18" /></ContentControl>
+                                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                                <TextBlock Text="Восстанавливать подключение после перезагрузки" Style="{StaticResource Title}" />
+                                                <TextBlock Text="Если VPN был включён, когда компьютер выключили или перезагрузили, The Cup of Tea подключится к тому же серверу после входа в Windows. Не срабатывает, если вы сами отключили VPN или вышли из программы." Style="{StaticResource Sub}" />
+                                            </StackPanel>
+                                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding ResumeAfterRestart}" AutomationProperties.Name="Восстанавливать подключение после перезагрузки" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <Border Style="{StaticResource Separator}" />
+                                        <Grid Style="{StaticResource Row}" IsEnabled="{Binding CanProtectBeforeLogin}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="ShieldLock24" FontSize="18" /></ContentControl>
+                                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                                <TextBlock Text="Защита до входа в Windows" Style="{StaticResource Title}" />
+                                                <TextBlock Text="Только режим TUN. Служба поднимает VPN при загрузке, ещё до входа в Windows: всё, что стартует раньше вас, тоже идёт через VPN. Сервер хранится зашифрованным, его может прочитать только служба." Style="{StaticResource Sub}" />
+                                            </StackPanel>
+                                            <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding ProtectBeforeLogin}" AutomationProperties.Name="Защита до входа в Windows" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <Border Style="{StaticResource Separator}" />
+                                        <Grid Style="{StaticResource Row}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                             <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="PlugDisconnected24" FontSize="18" /></ContentControl>
                                             <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
                                                 <TextBlock Text="Отключать VPN в доверенных сетях" Style="{StaticResource Title}" />
@@ -1298,6 +1329,37 @@
                 </Grid>
             </Grid>
         </Border>
+
+        <!-- Обязательное обновление: перекрывает всё окно, пока программа не обновлена (MainViewModel.Update) -->
+        <Grid Background="#F2080A09" Visibility="{Binding RequiredUpdate, Converter={x:Static local:NullToCollapsed.Instance}}" local:Motion.FadeInOnShow="True">
+            <Border Style="{StaticResource Card}" Background="{StaticResource Surface}" MaxWidth="580" Margin="40"
+                    Padding="34,30" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <ContentControl Style="{StaticResource IconBox}" HorizontalAlignment="Left">
+                        <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="22" />
+                    </ContentControl>
+                    <TextBlock Text="Нужно обновить программу" FontFamily="{StaticResource Display}" FontSize="24" FontWeight="Bold"
+                               Margin="0,16,0,0" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding RequiredUpdateText}" Style="{StaticResource Sub}" FontSize="14" Margin="0,8,0,0" TextWrapping="Wrap" />
+                    <Border Margin="0,16,0,0" Padding="14,10" CornerRadius="10" Background="{StaticResource Surface2}"
+                            Visibility="{Binding RequiredUpdateNotes, Converter={x:Static local:EmptyToCollapsed.Instance}}">
+                        <ScrollViewer MaxHeight="170" VerticalScrollBarVisibility="Auto">
+                            <TextBlock Text="{Binding RequiredUpdateNotes}" TextWrapping="Wrap" Foreground="{StaticResource Text2}" />
+                        </ScrollViewer>
+                    </Border>
+                    <TextBlock Text="{Binding UpdateText}" TextWrapping="Wrap" Margin="0,14,0,0"
+                               Visibility="{Binding UpdateText, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+                        <ui:Button Appearance="Primary" Icon="{ui:SymbolIcon ArrowDownload24}" Content="{Binding UpdateButtonText}"
+                                   Command="{Binding UpdateAppCommand}" Padding="18,9" AutomationProperties.AutomationId="RequiredUpdate_Install" />
+                        <ui:Button Content="Выйти из программы" Command="{Binding ExitCommand}" Margin="10,0,0,0" Padding="18,9"
+                                   AutomationProperties.AutomationId="RequiredUpdate_Exit" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Sub}" Margin="0,16,0,0" TextWrapping="Wrap"
+                               Text="Уже включённый VPN не отключается. Отключить его можно из меню значка в трее." />
+                </StackPanel>
+            </Border>
+        </Grid>
 
         <!-- Кнопки окна и перетаскивание — поверх, без масштаба -->
         <ui:TitleBar x:Name="TitleBar" VerticalAlignment="Top" Height="40" ShowHelp="False" />

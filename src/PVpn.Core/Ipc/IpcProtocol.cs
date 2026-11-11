@@ -30,6 +30,12 @@ public static class IpcCommands
     public const string Repair = "repair";
     public const string Logs = "logs";
 
+    /// <summary>
+    /// Защита до входа в Windows: <see cref="IpcRequest.Remember"/> true — служба запоминает текущее подключение и
+    /// поднимает его сама при загрузке; false — забывает.
+    /// </summary>
+    public const string Resume = "resume";
+
     /// <summary>Ядра: <see cref="IpcRequest.CoreAction"/> — status, check, update или rollback.</summary>
     public const string Cores = "cores";
 }
@@ -122,6 +128,12 @@ public sealed record IpcRequest
     /// <summary>Вместо ссылки — полный конфиг сервера из подписки (JSON). Служба очищает его сама.</summary>
     public string? Config { get; init; }
     public ConnectOptions? Options { get; init; }
+
+    /// <summary>
+    /// Для connect и resume: служба запоминает подключение (файл читает только SYSTEM) и сама поднимает его после
+    /// перезагрузки, ещё до входа пользователя. Тестовые подключения не запоминаются.
+    /// </summary>
+    public bool Remember { get; init; }
 
     /// <summary>Для logs: вернуть строки с номером больше этого.</summary>
     public long LogsAfter { get; init; }

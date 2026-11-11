@@ -45,37 +45,34 @@ public partial class App : Application
         ApplicationAccentColorManager.Apply(accent, Color.FromRgb(0x2B, 0xB9, 0x88), accent, Color.FromRgb(0x6E, 0xE7, 0xB7));
 
         vm = new MainViewModel { SnapshotMode = snapshot != null };
-        window = new MainWindow(vm);
         await vm.InitializeAsync();
 
         if (snapshot != null)
         {
-            await SnapshotAsync(window, snapshot, ArgValue(e.Args, "--tab"), ArgValue(e.Args, "--sub"), ArgValue(e.Args, "--width"), ArgValue(e.Args, "--height"));
+            await SnapshotAsync(EnsureWindow(), snapshot, ArgValue(e.Args, "--tab"), ArgValue(e.Args, "--sub"), ArgValue(e.Args, "--width"), ArgValue(e.Args, "--height"));
             return;
         }
 
         tray = new TrayIcon(vm, ShowMainWindow, () => _ = ExitAsync());
-        window.HiddenToTray += () =>
-        {
-            if (trayHintShown)
-                return;
-            trayHintShown = true;
-            tray.ShowBalloon($"{Brand.Name} работает в трее", "Подключение не прерывается. Открыть окно — щелчок по значку.");
-        };
         // Пока пользователь смотрит на окно, всплывающие уведомления не нужны: всё видно и так.
         vm.Notification += (title, text) =>
         {
-            if (!window.IsActive)
+            if (window is not { IsActive: true })
                 tray.ShowBalloon(title, text);
         };
-        // О новой версии — всегда, даже при открытом окне; щелчок по уведомлению открывает настройки и ставит её.
-        vm.UpdateNotification += release => tray.ShowBalloon("Доступно обновление",
-            $"{Brand.Name} {release.Version.ToString(3)} — нажмите, чтобы установить.", () =>
-            {
+        // Новая версия обязательна: окно с требованием обновиться выходит на передний план.
+        vm.UpdateRequiredShown += ShowMainWindow;
+        vm.ExitRequested += () => _ = ExitAsync();
+        releaseTimer = new DispatcherTimer { Interval = ReleaseDelay };
+        releaseTimer.Tick += (_, _) => ReleaseHiddenWindow();
+        // Закрыли окно, не обновившись, — через некоторое время оно появится снова.
+        nagTimer = new DispatcherTimer { Interval = NagInterval };
+        nagTimer.Tick += (_, _) =>
+        {
+            if (vm.RequiredUpdate != null && window is not { IsVisible: true })
                 ShowMainWindow();
-                window.ShowUpdates();
-                _ = vm.InstallFromNotificationAsync();
-            });
+        };
+        nagTimer.Start();
         hotkey = new GlobalHotkey(() => _ = vm.ToggleConnectCommand.ExecuteAsync(null));
         ApplyHotkey();
         vm.HotkeyChanged += ApplyHotkey;
@@ -167,12 +164,66 @@ public partial class App : Application
 
     private void ShowMainWindow()
     {
-        if (window == null || exiting)
+        if (vm == null || exiting)
             return;
-        window.Show();
-        if (window.WindowState == WindowState.Minimized)
-            window.WindowState = WindowState.Normal;
-        window.Activate();
+        releaseTimer?.Stop();
+        var w = EnsureWindow();
+        w.Show();
+        if (w.WindowState == WindowState.Minimized)
+            w.WindowState = WindowState.Normal;
+        w.Activate();
+    }
+
+    /// <summary>Сколько окно живёт спрятанным, прежде чем освободить его (быстро открыть снова — без задержки).</summary>
+    private static readonly TimeSpan ReleaseDelay = TimeSpan.FromSeconds(30);
+
+    /// <summary>Как часто возвращать окно «Нужно обновить», если его закрыли, не обновившись.</summary>
+    private static readonly TimeSpan NagInterval = TimeSpan.FromMinutes(15);
+
+    private DispatcherTimer? releaseTimer;
+    private DispatcherTimer? nagTimer;
+
+    /// <summary>
+    /// Окно создаётся, только когда его показывают (запуск в трей — без окна вовсе). Всё состояние — в MainViewModel,
+    /// так что новое окно открывается на той же странице.
+    /// </summary>
+    private MainWindow EnsureWindow()
+    {
+        if (window != null)
+            return window;
+        window = new MainWindow(vm!);
+        MainWindow = window;
+        window.HiddenToTray += OnHiddenToTray;
+        return window;
+    }
+
+    private void OnHiddenToTray()
+    {
+        releaseTimer?.Stop();
+        releaseTimer?.Start();
+        if (trayHintShown || tray == null)
+            return;
+        trayHintShown = true;
+        tray.ShowBalloon($"{Brand.Name} работает в трее", "Подключение не прерывается. Открыть окно — щелчок по значку.");
+    }
+
+    /// <summary>
+    /// Окно спрятано в трей: освобождаем его целиком — дерево элементов, картинки флагов, ресурсы отрисовки. Скрытое
+    /// окно держало в памяти около 200 МБ; без него программа в трее занимает в разы меньше.
+    /// </summary>
+    private void ReleaseHiddenWindow()
+    {
+        releaseTimer?.Stop();
+        if (window is not { } w || w.IsVisible || exiting)
+            return;
+        window = null;
+        w.HiddenToTray -= OnHiddenToTray;
+        w.AllowClose = true;
+        w.Close();
+        if (ReferenceEquals(MainWindow, w))
+            MainWindow = null;
+        // Сборка мусора — когда окно действительно закрылось и интерфейс ничем не занят.
+        Dispatcher.BeginInvoke(MemoryTrim.Run, DispatcherPriority.ApplicationIdle);
     }
 
     private async Task ExitAsync()
@@ -180,6 +231,8 @@ public partial class App : Application
         if (exiting)
             return;
         exiting = true;
+        releaseTimer?.Stop();
+        nagTimer?.Stop();
         // Каждый шаг — отдельно: ошибка в одном (вызов из меню трея уходит в «_ =», исключение никто не увидит)
         // не должна оставить процесс без значка и без окна, но живым.
         Try(() => tray?.Dispose());

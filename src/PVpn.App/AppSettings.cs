@@ -55,6 +55,18 @@ public sealed class AppSettings
     /// <summary>Подключаться самому: при запуске и при переходе в сеть, которой нет в доверенных.</summary>
     public bool AutoConnect { get; set; }
 
+    /// <summary>Подключаться к последнему серверу после входа в Windows, если VPN был включён при выключении ПК.</summary>
+    public bool ResumeAfterRestart { get; set; } = true;
+
+    /// <summary>VPN был включён, и пользователь его не выключал (выключение ПК не считается).</summary>
+    public bool WasConnected { get; set; }
+
+    /// <summary>Режим TUN: служба поднимает подключение сама при загрузке, до входа пользователя.</summary>
+    public bool ProtectBeforeLogin { get; set; }
+
+    /// <summary>Антивирусы, для которых подсказку про исключения скрыли.</summary>
+    public List<string> AntivirusHintDismissed { get; set; } = [];
+
     /// <summary>Доверенные сети (имена из Windows: у Wi-Fi — имя сети): в них VPN не нужен.</summary>
     public List<string> TrustedNetworks { get; set; } = [];
 

@@ -10,6 +10,9 @@ internal static class ServicePaths
     public static string DataDir => Product.DataDir(Environment.SpecialFolder.CommonApplicationData);
     public static string StateFile => Path.Combine(DataDir, "state.json");
     public static string ConfigFile => Path.Combine(DataDir, "service.json");
+
+    /// <summary>Подключение для восстановления при загрузке (защита до входа в Windows), зашифровано DPAPI SYSTEM.</summary>
+    public static string ResumeFile => Path.Combine(DataDir, "resume.dat");
     public static string LogDir => Path.Combine(DataDir, "logs");
     public static string SingBoxDir => Path.Combine(DataDir, "sing-box");
 

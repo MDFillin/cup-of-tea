@@ -106,10 +106,12 @@ internal sealed class PipeServer(SessionManager manager, CoreUpdateManager coreU
             case IpcCommands.Status:
                 return new IpcResponse { Ok = true, Status = manager.Status };
             case IpcCommands.Connect:
-                return manager.BeginConnect(request.Link, request.Config, request.Options);
+                return manager.BeginConnect(request);
             case IpcCommands.Disconnect:
-                await manager.DisconnectAsync("Отключено").ConfigureAwait(false);
+                await manager.UserDisconnectAsync().ConfigureAwait(false);
                 return new IpcResponse { Ok = true, Status = manager.Status };
+            case IpcCommands.Resume:
+                return manager.SetRemember(request.Remember);
             case IpcCommands.Confirm:
                 return manager.Confirm();
             case IpcCommands.Reconfigure:

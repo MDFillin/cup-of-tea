@@ -53,16 +53,22 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         ServicePaths.EnsureDirectories();
         log.Info($"Служба {Product.Name} {Version} запущена, ядра: {cores.Directory}");
         var interrupted = Recovery.Run(cores, log);
+        var resume = ResumeStore.Load();
         SetStatus(s => s with
         {
-            Message = interrupted ? "Подключение было прервано сбоем или перезагрузкой; сеть восстановлена" : "Отключено",
+            Message = resume != null ? "Восстанавливаю подключение после перезагрузки"
+                : interrupted ? "Подключение было прервано сбоем или перезагрузкой; сеть восстановлена" : "Отключено",
         });
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
+        if (resume != null)
+            StartResume(resume);
         return Task.CompletedTask;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        // Выключение Windows или обновление программы: запомненное подключение остаётся — поднимется при следующем запуске.
+        CancelResume();
         NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
         await DisconnectAsync("Служба остановлена").ConfigureAwait(false);
         log.Info("Служба остановлена");
@@ -86,43 +92,179 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     }
 
     /// <summary>Начинает подключение и сразу возвращает управление.</summary>
-    public IpcResponse BeginConnect(string? link, string? config, ConnectOptions? options)
+    public IpcResponse BeginConnect(IpcRequest request)
     {
-        if (string.IsNullOrWhiteSpace(link) && string.IsNullOrWhiteSpace(config))
-            return new IpcResponse { Ok = false, Error = "Не передана ссылка сервера" };
         Profile profile;
+        ConnectOptions options;
         try
         {
-            // Конфиг сервера из подписки служба очищает сама (ServerConfigs.Sanitize): клиенту не доверяем.
-            profile = !string.IsNullOrWhiteSpace(config) ? ServerConfigs.ParseRuntime(config) : LinkParser.Parse(link!);
+            (profile, options) = Prepare(request);
         }
         catch (Exception e) when (e is LinkParseException or ConfigException)
         {
             return new IpcResponse { Ok = false, Error = e.Message };
         }
 
-        options ??= new ConnectOptions();
-        if (options.Mtu is < 1280 or > 1500)
-            return new IpcResponse { Ok = false, Error = "MTU должен быть от 1280 до 1500" };
-        if (options.Stack is not (null or "gvisor" or "system" or "mixed"))
-            return new IpcResponse { Ok = false, Error = "Стек TUN: gvisor, system или mixed" };
-        try
-        {
-            options = options with
-            {
-                SplitTunnel = ValidateSplit(options.SplitTunnel),
-                Bypass = BypassRules.Validate(options.Bypass ?? BypassOptions.Default),
-                Dns = DnsRules.Validate(options.Dns ?? new DnsOptions()),
-                Routing = options.Routing is { } routing ? RoutingProfiles.Validate(routing) : null,
-            };
-        }
-        catch (ConfigException e)
-        {
-            return new IpcResponse { Ok = false, Error = e.Message };
-        }
-
+        // Команда пользователя важнее восстановления после перезагрузки.
+        CancelResume();
+        Volatile.Write(ref currentRequest, request);
+        RememberOrForget(request);
         _ = Task.Run(() => ConnectAsync(profile, options));
         return new IpcResponse { Ok = true, Status = Status };
+    }
+
+    /// <summary>Разбирает сервер и проверяет настройки (клиенту служба не доверяет).</summary>
+    /// <exception cref="LinkParseException" />
+    /// <exception cref="ConfigException" />
+    private static (Profile Profile, ConnectOptions Options) Prepare(IpcRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Link) && string.IsNullOrWhiteSpace(request.Config))
+            throw new ConfigException("Не передана ссылка сервера");
+        // Конфиг сервера из подписки служба очищает сама (ServerConfigs.Sanitize): клиенту не доверяем.
+        var profile = !string.IsNullOrWhiteSpace(request.Config) ? ServerConfigs.ParseRuntime(request.Config) : LinkParser.Parse(request.Link!);
+
+        var options = request.Options ?? new ConnectOptions();
+        if (options.Mtu is < 1280 or > 1500)
+            throw new ConfigException("MTU должен быть от 1280 до 1500");
+        if (options.Stack is not (null or "gvisor" or "system" or "mixed"))
+            throw new ConfigException("Стек TUN: gvisor, system или mixed");
+        options = options with
+        {
+            SplitTunnel = ValidateSplit(options.SplitTunnel),
+            Bypass = BypassRules.Validate(options.Bypass ?? BypassOptions.Default),
+            Dns = DnsRules.Validate(options.Dns ?? new DnsOptions()),
+            Routing = options.Routing is { } routing ? RoutingProfiles.Validate(routing) : null,
+        };
+        return (profile, options);
+    }
+
+    // ───────────── Защита до входа в Windows ─────────────
+
+    /// <summary>Запрос текущего подключения: его запоминают, если защиту включили, когда VPN уже подключён.</summary>
+    private IpcRequest? currentRequest;
+    private CancellationTokenSource? resumeCts;
+
+    /// <summary>Повторы, если после загрузки подключиться не вышло (сервер не ответил, сеть ещё не готова); дальше — раз в минуту.</summary>
+    private static readonly TimeSpan[] ResumeRetries =
+        [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1)];
+
+    /// <summary>Пользователь отключил VPN: после перезагрузки подключение больше не восстанавливается.</summary>
+    public async Task UserDisconnectAsync(string reason = "Отключено")
+    {
+        CancelResume();
+        Volatile.Write(ref currentRequest, null);
+        Forget();
+        await DisconnectAsync(reason).ConfigureAwait(false);
+    }
+
+    /// <summary>Переключатель «Защита до входа в Windows» изменили в настройках.</summary>
+    public IpcResponse SetRemember(bool remember)
+    {
+        if (!remember)
+            Forget();
+        else if (Volatile.Read(ref currentRequest) is { } request && Status.State != SessionState.Disconnected)
+            RememberOrForget(request with { Remember = true });
+        // Не подключено — запомнится при следующем подключении (интерфейс передаст Remember).
+        return new IpcResponse { Ok = true, Status = Status };
+    }
+
+    private void RememberOrForget(IpcRequest request)
+    {
+        // Тестовое подключение отключается само, если его не подтвердить, — после перезагрузки его не поднимаем.
+        if (!request.Remember || request.Options is { TestSeconds: > 0 })
+        {
+            Forget();
+            return;
+        }
+        try
+        {
+            ResumeStore.Save(request);
+            log.Info("Защита до входа в Windows: подключение запомнено, после перезагрузки служба поднимет его сама");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            log.Info($"Не удалось запомнить подключение для восстановления после перезагрузки: {e.Message}");
+        }
+    }
+
+    private void Forget()
+    {
+        try
+        {
+            if (!ResumeStore.Exists)
+                return;
+            ResumeStore.Clear();
+            log.Info("Защита до входа в Windows: запомненное подключение удалено");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.Info($"Не удалось удалить запомненное подключение: {e.Message}");
+        }
+    }
+
+    private void CancelResume() => Interlocked.Exchange(ref resumeCts, null)?.Cancel();
+
+    private void StartResume(IpcRequest request)
+    {
+        Profile profile;
+        ConnectOptions options;
+        try
+        {
+            (profile, options) = Prepare(request);
+        }
+        catch (Exception e) when (e is LinkParseException or ConfigException)
+        {
+            log.Info($"Запомненное подключение не восстановить: {e.Message}");
+            Forget();
+            SetStatus(s => s with { Message = "Отключено" });
+            return;
+        }
+        Volatile.Write(ref currentRequest, request);
+        var cts = new CancellationTokenSource();
+        resumeCts = cts;
+        log.Info($"Защита до входа в Windows: восстанавливаю подключение к {profile.Name}");
+        _ = Task.Run(() => ResumeAsync(profile, options, cts.Token));
+    }
+
+    /// <summary>Поднимает запомненное подключение после загрузки и повторяет, пока не выйдет или пользователь не вмешается.</summary>
+    private async Task ResumeAsync(Profile profile, ConnectOptions options, CancellationToken ct)
+    {
+        try
+        {
+            for (var attempt = 0; ; attempt++)
+            {
+                // После загрузки сеть появляется не сразу: ждём адаптер с маршрутом по умолчанию.
+                var waiting = false;
+                while (NetworkInfo.GetDefaultPhysicalInterface() == null)
+                {
+                    if (!waiting)
+                    {
+                        waiting = true;
+                        SetStatus(s => s with
+                        {
+                            State = SessionState.Connecting,
+                            ProfileName = profile.Name,
+                            Protocol = profile.ProtocolLabel,
+                            Message = "Жду сеть, чтобы восстановить подключение",
+                        });
+                    }
+                    await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+                }
+
+                await ConnectAsync(profile, options, ct).ConfigureAwait(false);
+                if (ct.IsCancellationRequested || Status.State == SessionState.Connected)
+                    return;
+
+                var delay = ResumeRetries[Math.Min(attempt, ResumeRetries.Length - 1)];
+                var error = Status.Message?.TrimEnd('.');
+                log.Info($"Подключение после перезагрузки не восстановилось ({error}), повтор через {delay.TotalSeconds:0} с");
+                SetStatus(s => s with { State = SessionState.Error, Message = $"{error}. Повтор через {delay.TotalSeconds:0} с" });
+                await Task.Delay(delay, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     /// <summary>Пустой список «мимо VPN» равносилен выключенному раздельному туннелированию.</summary>
@@ -170,8 +312,11 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         }
     }
 
-    private async Task ConnectAsync(Profile profile, ConnectOptions options)
+    /// <param name="abandon">Восстановление после перезагрузки: отменено командой пользователя — не начинать.</param>
+    private async Task ConnectAsync(Profile profile, ConnectOptions options, CancellationToken abandon = default)
     {
+        if (abandon.IsCancellationRequested)
+            return;
         var sw = Stopwatch.StartNew();
         sessionCts?.Cancel();
         // Пока прежнее подключение останавливается, интерфейс уже видит, что началось новое.
@@ -186,6 +331,8 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (abandon.IsCancellationRequested)
+                return;
             var cts = new CancellationTokenSource();
             log.Info($"Подключение: {profile.Name} ({profile.ProtocolLabel}, {profile.Host}:{profile.Port}); DNS {DnsRules.Resolve(options.Dns)}" +
                      (options.SplitTunnel != null ? $"; раздельное туннелирование: {TunSession.Describe(options.SplitTunnel)}" : "") +
@@ -335,7 +482,7 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
 
     public async Task RepairAsync()
     {
-        await DisconnectAsync("Сеть восстановлена").ConfigureAwait(false);
+        await UserDisconnectAsync("Сеть восстановлена").ConfigureAwait(false);
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {

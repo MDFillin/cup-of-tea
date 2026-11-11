@@ -56,7 +56,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private ProfileItem? selectedProfile;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsProxyMode), nameof(ModeDescription))]
+    [NotifyPropertyChangedFor(nameof(IsProxyMode), nameof(ModeDescription), nameof(CanProtectBeforeLogin))]
     private bool isTunMode = true;
 
     [ObservableProperty]
@@ -241,6 +241,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         StartWithWindows = Registry.CurrentUser.OpenSubKey(AutostartKey)?.GetValue(Product.Id) != null;
         LoadRoutingSettings();
         loadingSettings = false;
+        // До первого опроса службы: если она уже подключена (защита до входа), восстанавливать нечего.
+        LoadResumeSettings();
 
         // Прошлый запуск интерфейса упал в режиме прокси: вернуть системный прокси как было.
         if (WinInetProxy.HasPendingRestore)
@@ -610,7 +612,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     [RelayCommand]
     private async Task ToggleConnectAsync()
     {
+        // Отключиться можно всегда, а подключиться — только обновлённой программой.
+        if (!IsActive && BlockedByUpdate())
+            return;
         RememberUserChoice();
+        if (IsActive)
+            ForgetConnected();
         await ConnectOrDisconnectAsync();
     }
 
@@ -685,6 +692,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 // Сервер из подписки с полным конфигом — конфигом (служба очистит его сама), иначе ссылкой.
                 Link = profile is XrayConfigProfile ? null : profile.SourceLink,
                 Config = (profile as XrayConfigProfile)?.Config,
+                Remember = RememberForService,
                 Options = new ConnectOptions
                 {
                     UseServerRouting = UseServerRouting,
@@ -990,6 +998,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         UpdateSessionTime();
         OnHomeChanged();
+        TrackConnected(value);
         if (value != UiState.On)
             SplitPending = false;
     }
@@ -1253,6 +1262,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public async Task SwitchServerAsync(Guid id, bool connectIfOff = false)
     {
+        if (BlockedByUpdate())
+            return;
         if (Profiles.FirstOrDefault(p => p.Profile.Id == id) is not { } item)
             return;
         // Идёт подключение в TUN — служба сама отменит его и подключится к новому серверу.
@@ -1339,6 +1350,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         timer.Stop();
         if (SnapshotMode)
             return;
+        // Вышли из программы сами — после перезагрузки VPN не поднимаем (выключение Windows сюда не попадает).
+        ForgetConnected();
         // «Выход» выключает VPN в обоих режимах: прокси живёт в интерфейсе (системный прокси возвращается),
         // TUN держит служба — её просим отключиться. Сама служба остаётся запущенной.
         if (proxy != null || proxyStarting)

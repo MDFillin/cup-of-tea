@@ -1,5 +1,6 @@
 using System.Net;
 using PVpn.Core.Diagnostics;
+using PVpn.Core.Ipc;
 using PVpn.Core.Net;
 using PVpn.Core.Profiles;
 
@@ -121,5 +122,35 @@ public class MiscTests
         Assert.All(cidrs, c => NetworkInfo.ParseCidr(c));
         // Пустой список — фильтра нет вовсе (фильтр WFP без условий пропускал бы всё).
         Assert.Empty(KillSwitch.ServerCidrs([IPAddress.None]));
+    }
+
+    [Fact]
+    public void AntivirusAdviceSkipsDisabledAndBuiltIn()
+    {
+        // Значения productState из Центра безопасности: 0x061000/0x041100 — включён, 0x060100/0x040000 — выключен.
+        Assert.True(AntivirusAdvice.IsEnabled(0x061000));
+        Assert.True(AntivirusAdvice.IsEnabled(0x041100));
+        Assert.False(AntivirusAdvice.IsEnabled(0x060100));
+        Assert.False(AntivirusAdvice.IsEnabled(0x040000));
+        Assert.True(AntivirusAdvice.IsBuiltIn("Windows Defender"));
+        Assert.True(AntivirusAdvice.IsBuiltIn("Microsoft Defender Antivirus"));
+        Assert.False(AntivirusAdvice.IsBuiltIn("Kaspersky Standard"));
+
+        var kaspersky = AntivirusAdvice.For(["Kaspersky Standard"], @"C:\Program Files\The Cup of Tea\cores");
+        Assert.Contains(@"C:\Program Files\The Cup of Tea\cores", kaspersky);
+        Assert.Contains("Не проверять весь трафик", kaspersky);
+        Assert.DoesNotContain("\n", AntivirusAdvice.For(["Some Antivirus"], "cores"));
+    }
+
+    [Fact]
+    public void ResumeRequestRoundTripsRemember()
+    {
+        var request = new IpcRequest { Command = IpcCommands.Connect, Link = "vless://x@h:443", Remember = true, Options = new ConnectOptions { KillSwitch = true } };
+        var json = System.Text.Json.JsonSerializer.Serialize(request, IpcJsonContext.Default.IpcRequest);
+        var back = System.Text.Json.JsonSerializer.Deserialize(json, IpcJsonContext.Default.IpcRequest)!;
+        Assert.True(back.Remember);
+        Assert.True(back.Options!.KillSwitch);
+        // Старый интерфейс поле не передаёт — служба ничего не запоминает.
+        Assert.False(System.Text.Json.JsonSerializer.Deserialize("""{"command":"connect","link":"vless://x@h:443"}""", IpcJsonContext.Default.IpcRequest)!.Remember);
     }
 }

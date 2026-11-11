@@ -53,13 +53,6 @@ public partial class MainWindow : FluentWindow
         vm.SettingsPage = settingsPage;
     }
 
-    /// <summary>Открыть настройки и прокрутить к блоку «Обновления» (щелчок по уведомлению о новой версии).</summary>
-    public void ShowUpdates()
-    {
-        SelectPage(MainViewModel.SettingsPageIndex);
-        Dispatcher.BeginInvoke(() => UpdateButton.BringIntoView(), System.Windows.Threading.DispatcherPriority.Loaded);
-    }
-
     private void LogBox_TextChanged(object sender, TextChangedEventArgs e) => ((System.Windows.Controls.TextBox)sender).ScrollToEnd();
 
     // Пока страница скрыта, прокрутка не работает: листаем к концу, когда её открыли.

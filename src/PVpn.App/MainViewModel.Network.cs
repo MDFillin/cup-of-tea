@@ -89,7 +89,12 @@ public sealed partial class MainViewModel
             // Пока идёт подключение или отключение, не вмешиваемся.
             if (State == UiState.Busy && !StatusTitle.StartsWith("Переподключение", StringComparison.Ordinal))
                 return;
-            var action = AutoConnectPolicy.Decide(networks, TrustedNetworks, AutoConnect, DisconnectOnTrusted, IsActive, userChoiceKey == key);
+            // VPN был включён при выключении ПК — подключаемся, как при автоподключении (доверенные сети тоже уважаем).
+            var resuming = resumePending && !AutoConnect;
+            var action = AutoConnectPolicy.Decide(networks, TrustedNetworks, AutoConnect || resumePending, DisconnectOnTrusted, IsActive, userChoiceKey == key);
+            // Сеть есть, а подключаться не нужно (доверенная сеть или VPN уже поднят службой) — больше не ждём.
+            if (action != AutoConnectAction.Connect && networks.Count > 0)
+                resumePending = false;
             switch (action)
             {
                 case AutoConnectAction.Disconnect:
@@ -111,7 +116,9 @@ public sealed partial class MainViewModel
                         if (internet == InternetState.Offline)
                             return;
                     }
-                    AppendLog("app", $"Автоподключение: сеть {CurrentNetworks} не в доверенных");
+                    AppendLog("app", resuming
+                        ? $"Восстанавливаю подключение после перезагрузки: {PVpn.Core.Profiles.ProfileData.PlainName(SelectedProfile.Profile.Name)}"
+                        : $"Автоподключение: сеть {CurrentNetworks} не в доверенных");
                     await ConnectOrDisconnectAsync();
                     break;
             }
