@@ -52,17 +52,140 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     {
         ServicePaths.EnsureDirectories();
         log.Info($"Служба {Product.Name} {Version} запущена, ядра: {cores.Directory}");
-        var interrupted = Recovery.Run(cores, log);
-        var resume = ResumeStore.Load();
+        // Служба упала при живом подключении: поднимаем его сама, а kill switch (если он ещё стоит) не снимаем.
+        var crashed = LoadInterruptedSession();
+        var keep = false;
+        if (crashed != null && (crashed.Options?.KillSwitch ?? true))
+        {
+            try
+            {
+                keep = KillSwitch.CountFilters() > 0;
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+            }
+        }
+        var interrupted = Recovery.Run(cores, log, keep);
+        hold = keep;
+        var resume = crashed ?? ResumeStore.Load();
         SetStatus(s => s with
         {
-            Message = resume != null ? "Восстанавливаю подключение после перезагрузки"
+            Message = crashed != null ? "Служба перезапустилась после сбоя, восстанавливаю подключение"
+                : resume != null ? "Восстанавливаю подключение после перезагрузки"
                 : interrupted ? "Подключение было прервано сбоем или перезагрузкой; сеть восстановлена" : "Отключено",
         });
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
         if (resume != null)
-            StartResume(resume);
+            StartResume(resume, crashed != null ? "После сбоя службы восстанавливаю подключение к" : "Защита до входа в Windows: восстанавливаю подключение к");
         return Task.CompletedTask;
+    }
+
+    // ───────────── Kill switch держится, пока пользователь сам не отключит VPN ─────────────
+
+    private const string BlockedNote = "Интернет закрыт kill switch — «Отключить» вернёт обычный доступ.";
+
+    /// <summary>
+    /// Подключение с kill switch состоялось: если оно оборвётся не по воле пользователя (сервер перестал отвечать,
+    /// новый сервер не поднялся, упала служба), фильтры остаются и служба сама пробует подключиться снова.
+    /// Снимается отключением, «Восстановить сеть» и остановкой службы.
+    /// </summary>
+    private bool hold;
+
+    /// <summary>Запрос подключения, которое сейчас поднято (на него возвращаемся, если новый сервер не ответил).</summary>
+    private IpcRequest? connectedRequest;
+
+    /// <summary>Чем закончилась последняя попытка, пока интернет закрыт (для статуса между повторами).</summary>
+    private string? blockedError;
+
+    /// <summary>Номер команды пользователя: повтор, начатый до неё, не стартует.</summary>
+    private int commandSeq;
+    private readonly object resumeLock = new();
+
+    /// <summary>Подключение, прерванное падением службы (файл записан после загрузки Windows); после перезагрузки — null.</summary>
+    private static IpcRequest? LoadInterruptedSession()
+    {
+        try
+        {
+            var file = ServicePaths.SessionFile;
+            if (!File.Exists(file))
+                return null;
+            var written = File.GetLastWriteTimeUtc(file);
+            var boot = DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
+            var request = ResumeStore.Load(file);
+            if (request != null && written > boot)
+                return request;
+            ResumeStore.Clear(file);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+        return null;
+    }
+
+    private void SaveSession(IpcRequest request)
+    {
+        try
+        {
+            ResumeStore.Save(request, ServicePaths.SessionFile);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            log.Info($"Не удалось записать текущее подключение (после сбоя службы оно не восстановится): {e.Message}");
+        }
+    }
+
+    private void ClearSession()
+    {
+        try
+        {
+            ResumeStore.Clear(ServicePaths.SessionFile);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.Info($"Не удалось удалить запись о подключении: {e.Message}");
+        }
+    }
+
+    /// <summary>Снимает kill switch, оставленный без сессии (под gate).</summary>
+    private void ReleaseBlock()
+    {
+        try
+        {
+            if (KillSwitch.CountFilters() == 0)
+                return;
+            var removed = KillSwitch.Disable();
+            StateJournal.Update(j => j with { KillSwitch = false });
+            log.Info($"Kill switch выключен (снято фильтров: {removed})");
+        }
+        catch (System.ComponentModel.Win32Exception e)
+        {
+            log.Info($"Kill switch не выключился: {e.Message}");
+        }
+    }
+
+    /// <summary>Подключения нет, интернет закрыт kill switch; для интерфейса это «переподключение» — кнопка остаётся «Отключить».</summary>
+    private void SetBlocked(string error, string? next = null)
+    {
+        blockedError = error.TrimEnd('.');
+        SetStatus(s => s with
+        {
+            State = SessionState.Reconnecting,
+            Message = $"{blockedError}. {BlockedNote}" + (next != null ? $" {next}" : ""),
+            KillSwitchActive = true,
+        });
+    }
+
+    /// <summary>Повторять подключение, пока интернет закрыт (если после <paramref name="seq"/> не было команды пользователя).</summary>
+    private void StartRetry(int seq)
+    {
+        if (Volatile.Read(ref currentRequest) is not { } request)
+            return;
+        lock (resumeLock)
+        {
+            if (seq != commandSeq)
+                return;
+            StartResume(request, "Интернет закрыт kill switch, восстанавливаю подключение к", ResumeRetries[0]);
+        }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -106,10 +229,20 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         }
 
         // Команда пользователя важнее восстановления после перезагрузки.
-        CancelResume();
+        int seq;
+        lock (resumeLock)
+        {
+            seq = ++commandSeq;
+            CancelResume();
+        }
         Volatile.Write(ref currentRequest, request);
         RememberOrForget(request);
-        _ = Task.Run(() => ConnectAsync(profile, options));
+        _ = Task.Run(async () =>
+        {
+            // Не вышло, а интернет закрыт kill switch — служба пробует снова сама.
+            if (await ConnectAsync(profile, options).ConfigureAwait(false))
+                StartRetry(seq);
+        });
         return new IpcResponse { Ok = true, Status = Status };
     }
 
@@ -151,7 +284,11 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     /// <summary>Пользователь отключил VPN: после перезагрузки подключение больше не восстанавливается.</summary>
     public async Task UserDisconnectAsync(string reason = "Отключено")
     {
-        CancelResume();
+        lock (resumeLock)
+        {
+            commandSeq++;
+            CancelResume();
+        }
         Volatile.Write(ref currentRequest, null);
         Forget();
         await DisconnectAsync(reason).ConfigureAwait(false);
@@ -160,10 +297,15 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     /// <summary>Переключатель «Защита до входа в Windows» изменили в настройках.</summary>
     public IpcResponse SetRemember(bool remember)
     {
+        // Запросы текущего подключения помнят выбор: при возврате на прежний сервер он не теряется.
+        if (Volatile.Read(ref currentRequest) is { } current)
+            Volatile.Write(ref currentRequest, current with { Remember = remember });
+        if (connectedRequest is { } connected)
+            connectedRequest = connected with { Remember = remember };
         if (!remember)
             Forget();
         else if (Volatile.Read(ref currentRequest) is { } request && Status.State != SessionState.Disconnected)
-            RememberOrForget(request with { Remember = true });
+            RememberOrForget(request);
         // Не подключено — запомнится при следующем подключении (интерфейс передаст Remember).
         return new IpcResponse { Ok = true, Status = Status };
     }
@@ -204,7 +346,9 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
 
     private void CancelResume() => Interlocked.Exchange(ref resumeCts, null)?.Cancel();
 
-    private void StartResume(IpcRequest request)
+    /// <param name="what">Начало строки журнала (дальше — имя сервера).</param>
+    /// <param name="firstDelay">Пауза перед первой попыткой (повтор после неудачи).</param>
+    private void StartResume(IpcRequest request, string what, TimeSpan? firstDelay = null)
     {
         Profile profile;
         ConnectOptions options;
@@ -216,22 +360,34 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         {
             log.Info($"Запомненное подключение не восстановить: {e.Message}");
             Forget();
-            SetStatus(s => s with { Message = "Отключено" });
+            ClearSession();
+            if (hold)
+            {
+                hold = false;
+                ReleaseBlock();
+            }
+            SetStatus(s => s with { State = SessionState.Disconnected, Message = "Отключено", KillSwitchActive = false });
             return;
         }
         Volatile.Write(ref currentRequest, request);
         var cts = new CancellationTokenSource();
-        resumeCts = cts;
-        log.Info($"Защита до входа в Windows: восстанавливаю подключение к {profile.Name}");
-        _ = Task.Run(() => ResumeAsync(profile, options, cts.Token));
+        Interlocked.Exchange(ref resumeCts, cts)?.Cancel();
+        log.Info($"{what} {profile.Name}");
+        _ = Task.Run(() => ResumeAsync(profile, options, firstDelay, cts.Token));
     }
 
     /// <summary>Поднимает запомненное подключение после загрузки и повторяет, пока не выйдет или пользователь не вмешается.</summary>
-    private async Task ResumeAsync(Profile profile, ConnectOptions options, CancellationToken ct)
+    private async Task ResumeAsync(Profile profile, ConnectOptions options, TimeSpan? firstDelay, CancellationToken ct)
     {
         try
         {
-            for (var attempt = 0; ; attempt++)
+            if (firstDelay is { } pause)
+            {
+                if (hold && blockedError is { } failed)
+                    SetBlocked(failed, $"Повтор через {pause.TotalSeconds:0} с.");
+                await Task.Delay(pause, ct).ConfigureAwait(false);
+            }
+            for (var attempt = firstDelay != null ? 1 : 0; ; attempt++)
             {
                 // После загрузки сеть появляется не сразу: ждём адаптер с маршрутом по умолчанию.
                 var waiting = false;
@@ -256,9 +412,12 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
                     return;
 
                 var delay = ResumeRetries[Math.Min(attempt, ResumeRetries.Length - 1)];
-                var error = Status.Message?.TrimEnd('.');
-                log.Info($"Подключение после перезагрузки не восстановилось ({error}), повтор через {delay.TotalSeconds:0} с");
-                SetStatus(s => s with { State = SessionState.Error, Message = $"{error}. Повтор через {delay.TotalSeconds:0} с" });
+                var error = (hold ? blockedError : null) ?? Status.Message?.TrimEnd('.');
+                log.Info($"Подключение не восстановилось ({error}), повтор через {delay.TotalSeconds:0} с");
+                if (hold)
+                    SetBlocked(error ?? "Подключение не восстановилось", $"Повтор через {delay.TotalSeconds:0} с.");
+                else
+                    SetStatus(s => s with { State = SessionState.Error, Message = $"{error}. Повтор через {delay.TotalSeconds:0} с" });
                 await Task.Delay(delay, ct).ConfigureAwait(false);
             }
         }
@@ -313,10 +472,11 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     }
 
     /// <param name="abandon">Восстановление после перезагрузки: отменено командой пользователя — не начинать.</param>
-    private async Task ConnectAsync(Profile profile, ConnectOptions options, CancellationToken abandon = default)
+    /// <returns>true — подключиться не вышло, а интернет остался закрыт kill switch: нужен повтор.</returns>
+    private async Task<bool> ConnectAsync(Profile profile, ConnectOptions options, CancellationToken abandon = default)
     {
         if (abandon.IsCancellationRequested)
-            return;
+            return false;
         var sw = Stopwatch.StartNew();
         sessionCts?.Cancel();
         // Пока прежнее подключение останавливается, интерфейс уже видит, что началось новое.
@@ -332,8 +492,11 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
         try
         {
             if (abandon.IsCancellationRequested)
-                return;
+                return false;
             var cts = new CancellationTokenSource();
+            // Куда вернуться, если новый сервер не ответит (запоминаем до смены: она меняет сессию на месте).
+            (Profile Profile, ConnectOptions Options, IpcRequest Request)? previous =
+                hold && session is { } up && connectedRequest is { } upRequest ? (up.Profile, up.Options, upRequest) : null;
             log.Info($"Подключение: {profile.Name} ({profile.ProtocolLabel}, {profile.Host}:{profile.Port}); DNS {DnsRules.Resolve(options.Dns)}" +
                      (options.SplitTunnel != null ? $"; раздельное туннелирование: {TunSession.Describe(options.SplitTunnel)}" : "") +
                      (sw.ElapsedMilliseconds > 1000 ? $" (ждал предыдущую команду {sw.ElapsedMilliseconds} мс)" : ""));
@@ -349,16 +512,23 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
                 {
                     // Отменили отключением или новым подключением — состояние выставит та команда.
                     log.Info("Смена сервера отменена");
-                    return;
+                    return false;
                 }
                 if (switched)
                 {
                     OnConnected(running, options, cts, sw);
-                    return;
+                    return false;
                 }
             }
 
-            await StopSessionAsync().ConfigureAwait(false);
+            // Kill switch уже держит интернет закрытым и нужен новому подключению — между ними он не снимается.
+            var keep = hold && options.KillSwitch;
+            await StopSessionAsync(keep).ConfigureAwait(false);
+            if (hold && !keep)
+            {
+                hold = false;
+                ReleaseBlock();
+            }
             sessionCts = cts;
             SetStatus(_ => new ServiceStatus
             {
@@ -372,7 +542,7 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
             try
             {
                 session = await TunSession.StartAsync(profile, options, cores, log,
-                    step => SetStatus(s => s with { Message = step }), cts.Token).ConfigureAwait(false);
+                    step => SetStatus(s => s with { Message = step }), cts.Token, keep).ConfigureAwait(false);
             }
             catch (Exception e)
             {
@@ -384,11 +554,60 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
                     _ => $"Ошибка подключения: {e.Message}",
                 };
                 log.Info($"Подключение не удалось: {message}" + (e is SessionException or OperationCanceledException ? "" : $" ({e.GetType().Name})"));
-                SetStatus(s => s with { State = SessionState.Error, Message = message });
-                return;
+                if (!keep || e is OperationCanceledException)
+                {
+                    // Отмена — это отключение или новая команда: состояние и kill switch выставит она.
+                    if (!keep)
+                    {
+                        connectedRequest = null;
+                        ClearSession();
+                    }
+                    SetStatus(s => s with { State = SessionState.Error, Message = message });
+                    return false;
+                }
+
+                if (previous is { } back)
+                {
+                    // Прежний сервер работал — возвращаемся на него, а не оставляем пользователя без интернета.
+                    log.Info($"Возвращаюсь на прежний сервер: {back.Profile.Name}");
+                    Volatile.Write(ref currentRequest, back.Request);
+                    RememberOrForget(back.Request);
+                    SetStatus(_ => new ServiceStatus
+                    {
+                        State = SessionState.Connecting,
+                        ProfileName = back.Profile.Name,
+                        Protocol = back.Profile.ProtocolLabel,
+                        Server = $"{back.Profile.Host}:{back.Profile.Port}",
+                        Message = "Сервер не ответил, возвращаюсь на прежний",
+                        KillSwitchActive = true,
+                    });
+                    try
+                    {
+                        session = await TunSession.StartAsync(back.Profile, back.Options, cores, log,
+                            step => SetStatus(s => s with { Message = step }), cts.Token, holdKillSwitch: true).ConfigureAwait(false);
+                        OnConnected(session, back.Options, cts, sw);
+                        var note = $"Сервер «{profile.Name}» не ответил — подключение возвращено на прежний сервер";
+                        SetStatus(s => s with { Warnings = [.. s.Warnings, note] });
+                        return false;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        SetStatus(s => s with { State = SessionState.Error, Message = "Подключение отменено" });
+                        return false;
+                    }
+                    catch (Exception again)
+                    {
+                        log.Info($"Вернуться на прежний сервер не удалось: {again.Message}" + (again is SessionException ? "" : $" ({again.GetType().Name})"));
+                    }
+                }
+
+                log.Info("Интернет закрыт kill switch до восстановления подключения");
+                SetBlocked(message);
+                return true;
             }
 
             OnConnected(session, options, cts, sw);
+            return false;
         }
         finally
         {
@@ -427,6 +646,14 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     private void OnConnected(TunSession current, ConnectOptions options, CancellationTokenSource cts, Stopwatch sw)
     {
         testDeadline = options.TestSeconds > 0 ? DateTimeOffset.Now.AddSeconds(options.TestSeconds) : null;
+        // Тестовое подключение должно уметь отключиться само и вернуть сеть — его kill switch не удерживается.
+        hold = current.KillSwitchActive && testDeadline == null;
+        blockedError = null;
+        connectedRequest = testDeadline == null ? Volatile.Read(ref currentRequest) : null;
+        if (connectedRequest is { } request)
+            SaveSession(request);
+        else
+            ClearSession();
         SetStatus(s => s with
         {
             State = SessionState.Connected,
@@ -452,22 +679,45 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
 
     public async Task DisconnectAsync(string reason, SessionState finalState = SessionState.Disconnected)
     {
+        int seq;
+        lock (resumeLock)
+            seq = commandSeq;
         sessionCts?.Cancel();
+        var blocked = false;
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (session == null && Status.State is SessionState.Disconnected)
+            if (session == null && Status.State is SessionState.Disconnected && !hold)
                 return;
             var sw = Stopwatch.StartNew();
-            SetStatus(s => s with { State = SessionState.Disconnecting, Message = "Отключаюсь" });
-            await StopSessionAsync().ConfigureAwait(false);
-            SetStatus(_ => new ServiceStatus { State = finalState, Message = reason });
-            log.Info($"Отключено за {sw.ElapsedMilliseconds} мс: {reason}");
+            // Обрыв (не команда пользователя) при включённом kill switch: интернет остаётся закрытым, служба пробует снова.
+            blocked = finalState == SessionState.Error && hold;
+            if (!blocked)
+                SetStatus(s => s with { State = SessionState.Disconnecting, Message = "Отключаюсь" });
+            await StopSessionAsync(blocked).ConfigureAwait(false);
+            if (blocked)
+            {
+                SetBlocked(reason);
+                log.Info($"Подключение остановлено за {sw.ElapsedMilliseconds} мс, интернет закрыт kill switch: {reason}");
+            }
+            else
+            {
+                if (hold)
+                    ReleaseBlock();
+                hold = false;
+                blockedError = null;
+                connectedRequest = null;
+                ClearSession();
+                SetStatus(_ => new ServiceStatus { State = finalState, Message = reason });
+                log.Info($"Отключено за {sw.ElapsedMilliseconds} мс: {reason}");
+            }
         }
         finally
         {
             gate.Release();
         }
+        if (blocked)
+            StartRetry(seq);
     }
 
     public IpcResponse Confirm()
@@ -495,13 +745,14 @@ internal sealed class SessionManager(CorePaths cores, ServiceLog log) : IHostedS
     }
 
     /// <summary>Вызывается под gate.</summary>
-    private async Task StopSessionAsync()
+    /// <param name="keepKillSwitch">Kill switch остаётся (без туннеля): подключение оборвалось или его сейчас заменит другое.</param>
+    private async Task StopSessionAsync(bool keepKillSwitch = false)
     {
         var old = session;
         session = null;
         testDeadline = null;
         if (old != null)
-            await old.StopAsync().ConfigureAwait(false);
+            await old.StopAsync(keepKillSwitch: keepKillSwitch).ConfigureAwait(false);
         if (watchdog != null)
         {
             await Task.WhenAny(watchdog, Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);

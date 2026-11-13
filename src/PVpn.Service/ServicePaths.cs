@@ -13,6 +13,12 @@ internal static class ServicePaths
 
     /// <summary>Подключение для восстановления при загрузке (защита до входа в Windows), зашифровано DPAPI SYSTEM.</summary>
     public static string ResumeFile => Path.Combine(DataDir, "resume.dat");
+
+    /// <summary>
+    /// Текущее подключение (пока оно есть): если служба упадёт, после перезапуска она поднимет его сама.
+    /// Зашифровано так же, как <see cref="ResumeFile"/>; удаляется при отключении.
+    /// </summary>
+    public static string SessionFile => Path.Combine(DataDir, "session.dat");
     public static string LogDir => Path.Combine(DataDir, "logs");
     public static string SingBoxDir => Path.Combine(DataDir, "sing-box");
 

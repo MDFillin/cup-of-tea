@@ -96,8 +96,11 @@ internal sealed class TunSession
 
     private static bool BlocksQuic(Profile p, ConnectOptions o) => SingBoxConfigBuilder.BlocksQuic(p, o.BlockQuic);
 
+    /// <param name="holdKillSwitch">
+    /// Подключение поднимается взамен оборвавшегося: если не выйдет, kill switch остаётся и держит интернет закрытым.
+    /// </param>
     public static async Task<TunSession> StartAsync(Profile profile, ConnectOptions options, CorePaths cores, ServiceLog log,
-        Action<string> progress, CancellationToken ct)
+        Action<string> progress, CancellationToken ct, bool holdKillSwitch = false)
     {
         var session = new TunSession(profile, options, cores, log);
         try
@@ -108,10 +111,21 @@ internal sealed class TunSession
         catch
         {
             // Отмена или ошибка на старте: пользователь ждёт — ядрам меньше времени на штатную остановку.
-            await session.StopAsync(quick: true).ConfigureAwait(false);
+            await session.StopAsync(quick: true, keepKillSwitch: holdKillSwitch && options.KillSwitch).ConfigureAwait(false);
             throw;
         }
     }
+
+    /// <summary>Настройки текущего подключения (нужны, чтобы вернуться на этот сервер, если новый не ответит).</summary>
+    public ConnectOptions Options => options;
+
+    /// <summary>
+    /// Kill switch без туннеля: наружу только ядра, локальная сеть и DHCP. Так сеть остаётся закрытой, пока
+    /// подключение восстанавливается (сервер перестал отвечать, служба перезапустилась после сбоя).
+    /// </summary>
+    /// <exception cref="System.ComponentModel.Win32Exception" />
+    public static void Block(CorePaths cores) =>
+        KillSwitch.Enable([cores.Xray, cores.SingBox], [.. KillSwitch.DefaultLanCidrs, .. NetworkInfo.GetPublicLocalSubnets(InterfaceName)], null);
 
     private async Task StartCoreAsync(Action<string> progress, CancellationToken ct)
     {
@@ -370,7 +384,11 @@ internal sealed class TunSession
     }
 
     /// <param name="quick">Подключение не состоялось: на штатную остановку ядер и уход адаптера — по секунде-две.</param>
-    public async Task StopAsync(bool quick = false)
+    /// <param name="keepKillSwitch">
+    /// Подключение оборвалось не по воле пользователя (или его сейчас заменит другое): kill switch не снимается,
+    /// а остаётся в виде «без туннеля» — интернет закрыт, пока VPN не поднимется снова или пользователь не отключит его.
+    /// </param>
+    public async Task StopAsync(bool quick = false, bool keepKillSwitch = false)
     {
         var sw = Stopwatch.StartNew();
         ResetProbe();
@@ -386,7 +404,9 @@ internal sealed class TunSession
         log.Info($"Ядра остановлены за {sw.ElapsedMilliseconds} мс");
         WaitAdapterGone(TimeSpan.FromSeconds(quick ? 2 : 5));
         // Kill switch снимается последним, когда ядра уже остановлены.
-        if (KillSwitchActive)
+        if (KillSwitchActive && keepKillSwitch)
+            HoldKillSwitch();
+        else if (KillSwitchActive)
             DisableKillSwitch();
         RemoveRoute();
         DnsCache.Flush();
@@ -403,6 +423,21 @@ internal sealed class TunSession
         killSwitchTunnel = tunnelLuid;
         KillSwitchActive = true;
         log.Info(tunnelLuid == null ? "Kill switch включён" : "Kill switch: трафик через TUN разрешён");
+    }
+
+    private void HoldKillSwitch()
+    {
+        try
+        {
+            // Одной транзакцией WFP: разрешения для туннеля и адреса сервера уходят, окна без защиты нет.
+            Block(cores);
+            log.Info("Kill switch оставлен: интернет закрыт, пока подключение не восстановится");
+        }
+        catch (System.ComponentModel.Win32Exception e)
+        {
+            // Прежние фильтры остались на месте — они тоже никого не пускают мимо туннеля.
+            log.Info($"Kill switch не переставлен ({e.Message}), остаются прежние фильтры");
+        }
     }
 
     private void DisableKillSwitch()

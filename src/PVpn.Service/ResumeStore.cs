@@ -15,7 +15,8 @@ internal static class ResumeStore
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes(Product.Id + ".resume");
     private static readonly object Sync = new();
 
-    public static void Save(IpcRequest request)
+    /// <param name="file">Куда: <see cref="ServicePaths.ResumeFile"/> (по умолчанию) или <see cref="ServicePaths.SessionFile"/>.</param>
+    public static void Save(IpcRequest request, string? file = null)
     {
         // Сохраняется только то, что нужно для подключения: команда, сервер и настройки.
         var saved = new IpcRequest
@@ -24,33 +25,35 @@ internal static class ResumeStore
             Link = request.Link,
             Config = request.Config,
             Options = request.Options,
-            Remember = true,
+            Remember = request.Remember || file == null,
         };
         var plain = JsonSerializer.SerializeToUtf8Bytes(saved, IpcJsonContext.Default.IpcRequest);
         var encrypted = ProtectedData.Protect(plain, Entropy, DataProtectionScope.CurrentUser);
         CryptographicOperations.ZeroMemory(plain);
         lock (Sync)
         {
-            var temp = ServicePaths.ResumeFile + ".tmp";
-            using (var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            file ??= ServicePaths.ResumeFile;
+            var temp = file + ".tmp";
+            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
             {
-                file.Write(encrypted);
-                file.Flush(flushToDisk: true);
+                stream.Write(encrypted);
+                stream.Flush(flushToDisk: true);
             }
-            File.Move(temp, ServicePaths.ResumeFile, overwrite: true);
+            File.Move(temp, file, overwrite: true);
         }
     }
 
     /// <summary>null — нечего восстанавливать (или файл испорчен: тогда он удаляется).</summary>
-    public static IpcRequest? Load()
+    public static IpcRequest? Load(string? file = null)
     {
         lock (Sync)
         {
-            if (!File.Exists(ServicePaths.ResumeFile))
+            file ??= ServicePaths.ResumeFile;
+            if (!File.Exists(file))
                 return null;
             try
             {
-                var plain = ProtectedData.Unprotect(File.ReadAllBytes(ServicePaths.ResumeFile), Entropy, DataProtectionScope.CurrentUser);
+                var plain = ProtectedData.Unprotect(File.ReadAllBytes(file), Entropy, DataProtectionScope.CurrentUser);
                 try
                 {
                     return JsonSerializer.Deserialize(plain, IpcJsonContext.Default.IpcRequest);
@@ -62,7 +65,7 @@ internal static class ResumeStore
             }
             catch (Exception e) when (e is CryptographicException or JsonException or IOException)
             {
-                File.Delete(ServicePaths.ResumeFile);
+                File.Delete(file);
                 return null;
             }
         }
@@ -70,9 +73,9 @@ internal static class ResumeStore
 
     public static bool Exists => File.Exists(ServicePaths.ResumeFile);
 
-    public static void Clear()
+    public static void Clear(string? file = null)
     {
         lock (Sync)
-            File.Delete(ServicePaths.ResumeFile);
+            File.Delete(file ?? ServicePaths.ResumeFile);
     }
 }

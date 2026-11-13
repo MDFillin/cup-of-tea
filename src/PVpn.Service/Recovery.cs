@@ -13,7 +13,11 @@ namespace PVpn.Service;
 internal static class Recovery
 {
     /// <returns>true — было что убирать (подключение прервалось сбоем службы или ПК).</returns>
-    public static bool Run(CorePaths cores, ServiceLog log)
+    /// <param name="keepKillSwitch">
+    /// Служба перезапустилась после сбоя и сейчас сама поднимет прерванное подключение: kill switch не снимается,
+    /// а остаётся в виде «без туннеля», чтобы до переподключения ничего не ушло напрямую.
+    /// </param>
+    public static bool Run(CorePaths cores, ServiceLog log, bool keepKillSwitch = false)
     {
         var restored = KillOrphanCores(cores, log);
 
@@ -33,18 +37,36 @@ internal static class Recovery
         }
 
         // Kill switch ищется по своему поставщику WFP, а не по журналу: снимется, даже если журнал потерян.
-        try
+        var held = false;
+        if (keepKillSwitch)
         {
-            var removed = KillSwitch.Disable();
-            if (removed > 0)
+            try
             {
+                TunSession.Block(cores);
+                held = true;
                 restored = true;
-                log.Info($"Восстановление: снят kill switch ({removed} фильтров)");
+                log.Info("Восстановление: kill switch оставлен — интернет закрыт, пока подключение не восстановится");
+            }
+            catch (Win32Exception e)
+            {
+                log.Info($"Восстановление: kill switch не переставлен: {e.Message}");
             }
         }
-        catch (Win32Exception e)
+        if (!held)
         {
-            log.Info($"Восстановление: kill switch не снят: {e.Message}");
+            try
+            {
+                var removed = KillSwitch.Disable();
+                if (removed > 0)
+                {
+                    restored = true;
+                    log.Info($"Восстановление: снят kill switch ({removed} фильтров)");
+                }
+            }
+            catch (Win32Exception e)
+            {
+                log.Info($"Восстановление: kill switch не снят: {e.Message}");
+            }
         }
 
         if (!WaitAdapterGone(TunSession.InterfaceName, TimeSpan.FromSeconds(5)))
@@ -52,6 +74,8 @@ internal static class Recovery
 
         DnsCache.Flush();
         StateJournal.Clear();
+        if (held)
+            StateJournal.Update(j => j with { KillSwitch = true });
         return restored;
     }
 
