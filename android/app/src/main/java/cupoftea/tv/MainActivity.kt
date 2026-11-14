@@ -66,6 +66,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun connect(serverId: String?) {
+        // Обязательное обновление: подключиться или сменить сервер можно только после него.
+        if (Updates.required != null) {
+            Updates.showScreen()
+            return
+        }
         val ask = VpnService.prepare(this)
         if (ask != null) {
             pendingServer = serverId

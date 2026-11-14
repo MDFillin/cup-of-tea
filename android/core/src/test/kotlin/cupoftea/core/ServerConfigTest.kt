@@ -150,6 +150,15 @@ class ServerConfigTest {
     }
 
     @Test
+    fun serverDnsAnswersOnlyIpv4InTunUnlessSubscriptionSaysOtherwise() {
+        val raw = sample()
+        raw.objAt("dns").remove("queryStrategy")
+        assertEquals("UseIPv4", XrayConfigBuilder.build(server(raw), tun).at("dns", "queryStrategy"))
+        raw.objAt("dns")["queryStrategy"] = "UseIP"
+        assertEquals("UseIP", XrayConfigBuilder.build(server(raw), tun).at("dns", "queryStrategy"))
+    }
+
+    @Test
     fun ownDnsOutboundGetsFreeTagWhenNameIsTaken() {
         val raw = sample()
         raw.arrAt("outbounds").removeIf { it.at("protocol") == "dns" }

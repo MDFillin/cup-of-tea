@@ -127,6 +127,9 @@ object XrayConfigBuilder {
             val rules = config.objOrPut("routing").arrOrPut("rules")
             rules.add(0, Js.obj("type" to "field", "inboundTag" to Js.arr(TUN_TAG), "port" to "53", "outboundTag" to dnsTag))
             if (!hasServerDns) addDoh(config, options.dns)
+            // Туннель — только IPv4: и свой DNS сервера отдаёт программам только A-записи (если подписка не задала
+            // иное), иначе запросы AAAA и попытки по IPv6 дают паузы при открытии сайтов (как 0.8.2 на ПК).
+            else config.objOrPut("dns").putIfAbsent("queryStrategy", "UseIPv4")
         }
         config["inbounds"] = inbounds
         options.resolvedHosts?.takeIf { it.isNotEmpty() }?.let { addHosts(config, it) }

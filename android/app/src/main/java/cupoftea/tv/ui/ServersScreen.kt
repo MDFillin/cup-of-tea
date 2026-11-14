@@ -52,7 +52,7 @@ fun ServersScreen(repo: Repository, actions: UiActions) {
     var updating by remember { mutableStateOf(false) }
     var phone by remember { mutableStateOf(false) }
     val groups = repo.groups(data)
-    val connectedId = (state as? VpnState.On)?.serverId
+    val connectedId = (state as? VpnState.On)?.serverId ?: (state as? VpnState.Reconnecting)?.serverId
 
     Column {
         ScreenTitle("Серверы", "OK — подключиться, долгое нажатие — меню сервера · порядок: ${sortTitles[settings.sortOrder]}")
@@ -125,7 +125,7 @@ fun ServersScreen(repo: Repository, actions: UiActions) {
 }
 
 /** Автовыбор — всегда первым; остальные — по выбранной сортировке. */
-private fun sorted(group: ServerGroup, order: String, pings: Map<String, cupoftea.core.sessions.DelayResult>, repo: Repository): List<Profile> {
+internal fun sorted(group: ServerGroup, order: String, pings: Map<String, cupoftea.core.sessions.DelayResult>, repo: Repository): List<Profile> {
     val (auto, rest) = group.servers.partition(repo::isAuto)
     val effective = if (order == "subscription") group.subscription?.sortOrder ?: "none" else order
     val sorted = when (effective) {
@@ -155,7 +155,7 @@ private fun GroupHeader(group: ServerGroup, collapsed: Boolean, onToggle: () -> 
 }
 
 /** «Использовано 12.3 ГБ из 60 ГБ · до 01.12.2026 · ошибка: …» */
-private fun subscriptionLine(s: Subscription): String? {
+internal fun subscriptionLine(s: Subscription): String? {
     val parts = mutableListOf<String>()
     val used = s.upload + s.download
     if (s.total > 0) parts.add("использовано ${formatBytes(used)} из ${formatBytes(s.total)}")
@@ -167,7 +167,7 @@ private fun subscriptionLine(s: Subscription): String? {
 }
 
 @Composable
-private fun ServerRow(
+internal fun ServerRow(
     p: Profile,
     ping: cupoftea.core.sessions.DelayResult?,
     selected: Boolean,

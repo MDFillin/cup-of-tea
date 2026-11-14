@@ -47,6 +47,31 @@ object Updates {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state
 
+    /**
+     * Обновление обязательное (0.8.0 на ПК): пока новая версия не поставлена, подключиться и сменить сервер нельзя.
+     * Отключиться можно; подключение при включении ТВ и переподключение при обрыве работают — без них ТВ остался бы
+     * без защиты.
+     */
+    val required: TvRelease?
+        get() = when (val s = _state.value) {
+            is UpdateState.Available -> s.release
+            is UpdateState.Downloading -> s.release
+            is UpdateState.Installing -> s.release
+            else -> null
+        }
+
+    /** «Позже» прячет экран обновления на 15 минут; попытка подключиться показывает его сразу. */
+    private val _hiddenUntil = MutableStateFlow(0L)
+    val hiddenUntil: StateFlow<Long> = _hiddenUntil
+
+    fun hideScreen() {
+        _hiddenUntil.value = System.currentTimeMillis() + 15 * 60_000L
+    }
+
+    fun showScreen() {
+        _hiddenUntil.value = 0
+    }
+
     /** Архитектуры устройства в порядке предпочтения (SberBox — только armeabi-v7a при 64-битном процессоре). */
     private val abis get() = Build.SUPPORTED_ABIS.toList()
 

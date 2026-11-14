@@ -1,27 +1,63 @@
 package cupoftea.tv.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
 
-/** Палитра десктопа (Theme.xaml): нейтральный тёмный фон, зелёный акцент. */
+/**
+ * Палитра десктопа: обычная (Palette.xaml) и зимняя (WinterTheme.xaml, 0.8.3). Цвета читают [winter] — смена
+ * оформления перерисовывает экран без перезапуска.
+ */
 object Palette {
-    val Bg = Color(0xFF090B0A)
-    val Side = Color(0xFF0D100E)
-    val Surface = Color(0xFF131715)
-    val Surface2 = Color(0xFF1A1F1C)
-    val Surface3 = Color(0xFF222925)
-    val Line = Color(0xFF1F2622)
-    val Text1 = Color(0xFFF2F5F3)
-    val Text2 = Color(0xFF9BA59F)
-    val Text3 = Color(0xFF626B66)
-    val Accent = Color(0xFF34D399)
-    val OnAccent = Color(0xFF08100B)
-    val Up = Color(0xFF7AA7FF)
+    var winter by mutableStateOf(false)
+
+    private fun pick(normal: Long, cold: Long) = Color(if (winter) cold else normal)
+
+    val Bg get() = pick(0xFF090B0A, 0xFF080B10)
+    val Side get() = pick(0xFF0D100E, 0xFF0B0F15)
+    val Surface get() = pick(0xFF131715, 0xFF10151C)
+    val Surface2 get() = pick(0xFF1A1F1C, 0xFF161D26)
+    val Surface3 get() = pick(0xFF222925, 0xFF1E2731)
+    val Line get() = pick(0xFF1F2622, 0xFF1B232D)
+    val Text1 get() = pick(0xFFF2F5F3, 0xFFF1F5F9)
+    val Text2 get() = pick(0xFF9BA59F, 0xFF9AA6B5)
+    val Text3 get() = pick(0xFF626B66, 0xFF5E6A79)
+    val Accent get() = pick(0xFF34D399, 0xFF5CC8F2)
+    val OnAccent get() = pick(0xFF08100B, 0xFF061018)
+    val Up get() = pick(0xFF7AA7FF, 0xFFA5B4FC)
     val Warn = Color(0xFFF5B544)
     val Error = Color(0xFFF87171)
     val Heart = Color(0xFFF43F5E)
+}
+
+/** Зимнее оформление (как Season.cs на ПК): «auto» — с 1 декабря по 28 февраля, «on» — всегда, «off» — никогда. */
+object Season {
+    const val AUTO = "auto"
+    const val ALWAYS = "on"
+    const val NEVER = "off"
+
+    fun isWinter(month: Int) = month == 12 || month == 1 || month == 2
+
+    fun winterFor(mode: String?, now: java.util.Calendar = java.util.Calendar.getInstance()) = when (mode) {
+        ALWAYS -> true
+        NEVER -> false
+        else -> isWinter(now.get(java.util.Calendar.MONTH) + 1)
+    }
+
+    /** Поздравление над кнопкой на главной: 30–31 декабря и новогодние каникулы. */
+    fun holidayGreeting(now: java.util.Calendar = java.util.Calendar.getInstance()): String? {
+        val month = now.get(java.util.Calendar.MONTH) + 1
+        val day = now.get(java.util.Calendar.DAY_OF_MONTH)
+        return when {
+            month == 12 && day >= 30 -> "С наступающим Новым годом!"
+            month == 1 && day <= 8 -> "С Новым годом!"
+            else -> null
+        }
+    }
 }
 
 @Composable

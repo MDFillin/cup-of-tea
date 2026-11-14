@@ -53,6 +53,8 @@ sealed interface VpnState {
     data object Off : VpnState
     data class Connecting(val server: String, val step: String) : VpnState
     data class On(val serverId: String, val server: String, val since: Long) : VpnState
+    /** Связь с сервером потеряна: туннель открыт (интернет закрыт, мимо VPN ничего не уходит), идут повторы. */
+    data class Reconnecting(val serverId: String, val server: String, val attempt: Int) : VpnState
     data class Failed(val message: String) : VpnState
 }
 
@@ -97,8 +99,15 @@ class CupVpnService : VpnService() {
 
         /** Настройки подключения изменились: если VPN включён — переподключиться с ними к тому же серверу. */
         fun reconnectIfOn(context: Context) {
-            (_state.value as? VpnState.On)?.let { connect(context, it.serverId) }
+            when (val s = _state.value) {
+                is VpnState.On -> connect(context, s.serverId)
+                is VpnState.Reconnecting -> connect(context, s.serverId)
+                else -> {}
+            }
         }
+
+        /** Паузы между попытками переподключения (как служба на ПК с 0.8.1): дальше — раз в минуту. */
+        private val retryDelaysMs = longArrayOf(5_000, 10_000, 20_000, 30_000, 60_000)
 
         fun disconnect(context: Context) {
             if (_state.value == VpnState.Off) return
@@ -131,11 +140,18 @@ class CupVpnService : VpnService() {
             // Без action служба запускается системой («постоянный VPN») — подключаемся к выбранному серверу.
             else -> {
                 startForegroundCompat(notification("Подключение…"))
+                // Перезапуск системой после того, как VPN выключили кнопкой, — не подключаемся.
+                if (intent == null && !repo.settings.value.wasConnected && _state.value == VpnState.Off) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 val id = intent?.getStringExtra(EXTRA_SERVER)
                 scope.launch { mutex.withLock { start(id) } }
             }
         }
-        return START_NOT_STICKY
+        // Система убила процесс — поднимет службу снова (без intent), и она подключится к выбранному серверу.
+        return if (intent?.action == ACTION_DISCONNECT) START_NOT_STICKY else START_STICKY
     }
 
     override fun onRevoke() {
@@ -161,9 +177,21 @@ class CupVpnService : VpnService() {
             return
         }
         val name = Flags.strip(p.name)
+        // Уже подключены (или переподключаемся) — это смена сервера: прежний работает, пока новый не проверен.
+        val previous = profile?.takeIf { tun != null && core != null && it.id != p.id }
+        val previousState = _state.value
         try {
-            _state.value = VpnState.Connecting(name, "Готовлю конфиг")
+            _state.value = VpnState.Connecting(name, if (previous != null) "Проверяю сервер" else "Готовлю конфиг")
             startForegroundCompat(notification("Подключение: $name"))
+
+            if (previous != null && !probe(p)) {
+                // Как служба на ПК (0.8.1): новый сервер не ответил — остаёмся на прежнем.
+                _state.value = previousState
+                val note = "Сервер «$name» не ответил — остаётся «${Flags.strip(previous.name)}»"
+                repo.say(note)
+                alert("Сервер не ответил", note)
+                return
+            }
             if (p.id != repo.data.value.selectedId) repo.select(p.id)
 
             val settings = repo.settings.value
@@ -189,15 +217,22 @@ class CupVpnService : VpnService() {
             val json = Js.stringify(cfg)
             _state.value = VpnState.Connecting(name, "Запускаю ядро")
 
-            // TUN поднимается заново только при первом подключении или смене состава приложений.
+            // Новый TUN и ядро поднимаются до того, как закрываются прежние: Android переводит трафик на новый
+            // интерфейс сразу, и окна без туннеля при смене сервера нет.
             val serverIps = (resolved.values + hosts.filter(::isIpLiteral)).toSet()
+            val pfd = establish(name, serverIps) ?: throw IllegalStateException("нет разрешения на VPN")
+            libcup.Libcup.setMemoryLimit(settings.coreMemoryMb.toLong())
+            val newCore = try {
+                libcup.Libcup.start(json, repo.geoDir.absolutePath, pfd.fd.toLong())
+            } catch (e: Exception) {
+                try { pfd.close() } catch (_: Exception) {}
+                throw e
+            }
+            stopJobs()
             closeCore()
             closeTun()
-            val pfd = establish(name, serverIps) ?: throw IllegalStateException("нет разрешения на VPN")
             tun = pfd
-            libcup.Libcup.setMemoryLimit(settings.coreMemoryMb.toLong())
-            logFile(this).delete()
-            core = libcup.Libcup.start(json, repo.geoDir.absolutePath, pfd.fd.toLong())
+            core = newCore
             config = json
             profile = p
             watchdog.reset()
@@ -212,7 +247,38 @@ class CupVpnService : VpnService() {
             startJobs()
         } catch (e: Exception) {
             Log.e(TAG, "не подключился", e)
-            fail(shortError(e))
+            val current = profile
+            if (tun != null && core != null && current != null) {
+                // Прежнее подключение не тронуто — остаёмся на нём.
+                _state.value = previousState
+                repo.say("«$name»: ${shortError(e)} — остаётся «${Flags.strip(current.name)}»")
+            } else if (tun != null) {
+                // Туннель уже был: не закрываем его (иначе трафик ушёл бы мимо VPN), а повторяем попытки.
+                startReconnecting(shortError(e))
+            } else fail(shortError(e))
+        }
+    }
+
+    /** Отвечает ли сервер: отдельное ядро без TUN, запрос generate_204 через выход сервера (2 попытки). */
+    private fun probe(p: Profile): Boolean {
+        val plan = cupoftea.core.sessions.BatchPing.plan(listOf(cupoftea.core.sessions.PingTarget(p, repo.bypassFor(p))))
+        val tag = plan.tags[p.id] ?: return false
+        val instance = try {
+            libcup.Libcup.start(Js.stringify(plan.config), repo.geoDir.absolutePath, -1)
+        } catch (e: Exception) {
+            return false
+        }
+        try {
+            repeat(2) {
+                try {
+                    instance.get(tag, BatchPing.PROBE_URL, 8_000)
+                    return true
+                } catch (_: Exception) {
+                }
+            }
+            return false
+        } finally {
+            instance.close()
         }
     }
 
@@ -276,17 +342,69 @@ class CupVpnService : VpnService() {
         return b.establish()
     }
 
-    /** Перезапуск только ядра: TUN остаётся, пакеты ждут в нём — мимо туннеля в эти секунды ничего не уходит. */
-    private suspend fun restartCore(reason: String) = mutex.withLock {
-        val pfd = tun ?: return@withLock
-        val json = config ?: return@withLock
+    /**
+     * Перезапуск только ядра: TUN остаётся, пакеты ждут в нём — мимо туннеля в эти секунды ничего не уходит.
+     * false — ядро не запустилось (туннель всё равно открыт).
+     */
+    private suspend fun restartCore(reason: String): Boolean = mutex.withLock {
+        val pfd = tun ?: return@withLock false
+        val json = config ?: return@withLock false
         Log.w(TAG, "перезапуск ядра: $reason")
         closeCore()
         try {
             core = libcup.Libcup.start(json, repo.geoDir.absolutePath, pfd.fd.toLong())
+            true
         } catch (e: Exception) {
             Log.e(TAG, "ядро не перезапустилось", e)
-            fail(shortError(e))
+            false
+        }
+    }
+
+    private var reconnectJob: Job? = null
+
+    /**
+     * Связь потеряна, а перезапуски не помогли (0.8.1 на ПК): туннель не закрывается — интернет закрыт, мимо VPN
+     * ничего не уходит, — и попытки идут дальше: 5 с, 10 с, 20 с, 30 с, потом раз в минуту. Сеть вернулась —
+     * пробуем сразу. Прекращает «Отключить».
+     */
+    private fun startReconnecting(reason: String) {
+        val p = profile ?: return
+        val name = Flags.strip(p.name)
+        stopJobs()
+        reconnectJob?.cancel()
+        Log.w(TAG, "переподключение: $reason")
+        _state.value = VpnState.Reconnecting(p.id, name, 0)
+        startForegroundCompat(notification("Переподключение: $name — интернет закрыт до восстановления связи"))
+        alert("Нет связи с сервером", "$name: переподключаюсь, интернет закрыт до восстановления связи")
+        reconnectJob = scope.launch {
+            var attempt = 0
+            while (isActive) {
+                delay(retryDelaysMs[attempt.coerceAtMost(retryDelaysMs.size - 1)])
+                attempt++
+                _state.value = VpnState.Reconnecting(p.id, name, attempt)
+                if (network == null) continue
+                if (restartCore("попытка $attempt") && coreAnswers()) {
+                    Log.i(TAG, "связь восстановлена: ${p.name}")
+                    watchdog.reset()
+                    _state.value = VpnState.On(p.id, name, System.currentTimeMillis())
+                    _stats.value = _stats.value.copy(serverDown = false)
+                    startForegroundCompat(notification("Подключено: $name"))
+                    cancelAlert()
+                    startJobs()
+                    return@launch
+                }
+            }
+        }
+    }
+
+    /** Ядро отвечает через сервер (по маршрутам конфига). */
+    private fun coreAnswers(): Boolean {
+        val c = core ?: return false
+        return try {
+            c.get("", BatchPing.PROBE_URL, 10_000)
+            true
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -340,22 +458,18 @@ class CupVpnService : VpnService() {
             refreshIp()
             while (isActive) {
                 delay(watchdog.nextCheckInMs)
-                val c = core ?: continue
-                val ok = try {
-                    c.get("", BatchPing.PROBE_URL, 10_000)
-                    true
-                } catch (e: Exception) {
-                    false
-                }
+                val ok = coreAnswers()
                 when (watchdog.report(ok, networkAvailable())) {
-                    WatchdogAction.Restart -> restartCore("две проверки подряд не прошли")
+                    WatchdogAction.Restart -> if (!restartCore("две проверки подряд не прошли")) {
+                        startReconnecting("ядро не перезапустилось")
+                        return@launch
+                    }
                     WatchdogAction.None -> {}
                 }
-                val down = watchdog.gaveUp
-                if (down != _stats.value.serverDown) {
-                    _stats.value = _stats.value.copy(serverDown = down)
-                    if (down) alert("Сервер не отвечает", "${profile?.name?.let(Flags::strip) ?: "Сервер"}: проверьте его или выберите другой")
-                    else cancelAlert()
+                if (watchdog.gaveUp) {
+                    _stats.value = _stats.value.copy(serverDown = true)
+                    startReconnecting("сервер не отвечает после ${Watchdog.MAX_RESTARTS} перезапусков")
+                    return@launch
                 }
             }
         }
@@ -373,6 +487,8 @@ class CupVpnService : VpnService() {
     }
 
     private fun stopJobs() {
+        reconnectJob?.cancel()
+        reconnectJob = null
         watchJob?.cancel()
         statsJob?.cancel()
         watchJob = null

@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -61,18 +62,24 @@ class UiActions(
 fun AppRoot(repo: Repository, actions: UiActions) {
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     val state by CupVpnService.state.collectAsState()
+    val settings by repo.settings.collectAsState()
+    Palette.winter = Season.winterFor(settings.winter)
     CupTheme {
-        Row(Modifier.fillMaxSize().background(Palette.Bg)) {
-            Rail(tab, state) { tab = it }
-            Box(Modifier.fillMaxHeight().weight(1f).padding(start = 40.dp, end = 48.dp, top = 36.dp, bottom = 24.dp)) {
-                when (tab) {
-                    Tab.Home -> HomeScreen(repo, actions) { tab = Tab.Servers }
-                    Tab.Servers -> ServersScreen(repo, actions)
-                    Tab.Routes -> RoutesScreen(repo, actions)
-                    Tab.Settings -> SettingsScreen(repo, actions)
-                    Tab.Log -> LogScreen(repo)
+        // Нажатия пульта видит пасхалка с секретным кодом; перехватываются только OK в конце кода.
+        Box(Modifier.fillMaxSize().onPreviewKeyEvent { Eggs.onKey(it) }) {
+            Row(Modifier.fillMaxSize().background(Palette.Bg)) {
+                Rail(tab, state) { tab = it }
+                Box(Modifier.fillMaxHeight().weight(1f).padding(start = 40.dp, end = 48.dp, top = 36.dp, bottom = 24.dp)) {
+                    when (tab) {
+                        Tab.Home -> HomeScreen(repo, actions) { tab = Tab.Servers }
+                        Tab.Servers -> ServersScreen(repo, actions)
+                        Tab.Routes -> RoutesScreen(repo, actions)
+                        Tab.Settings -> SettingsScreen(repo, actions)
+                        Tab.Log -> LogScreen(repo)
+                    }
                 }
             }
+            RequiredUpdateScreen(actions)
         }
     }
 }
@@ -90,10 +97,25 @@ private fun Rail(current: Tab, state: VpnState, onSelect: (Tab) -> Unit) {
             .focusGroup(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp, bottom = 28.dp)) {
-            Box(Modifier.size(12.dp).background(dot, CircleShape))
-            Spacer(Modifier.width(10.dp))
-            Text("The Cup of Tea", fontSize = 20.sp, color = Palette.Text1)
+        // Название: пять нажатий OK — пасхалка; зимой — колпак.
+        Surface(
+            onClick = { Eggs.logoPressed() },
+            modifier = Modifier.padding(bottom = 22.dp),
+            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = Palette.Side, contentColor = Palette.Text1,
+                focusedContainerColor = Palette.Surface3, focusedContentColor = Palette.Text1,
+            ),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+        ) {
+            Box {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    Box(Modifier.size(12.dp).background(dot, CircleShape))
+                    Spacer(Modifier.width(10.dp))
+                    Text("The Cup of Tea", fontSize = 20.sp)
+                }
+                if (Palette.winter) SantaHat(Modifier.padding(start = 2.dp).size(22.dp, 18.dp))
+            }
         }
         for (t in Tab.entries) {
             var focused by remember { mutableStateOf(false) }
@@ -126,7 +148,7 @@ private fun Rail(current: Tab, state: VpnState, onSelect: (Tab) -> Unit) {
 
 fun stateColor(state: VpnState) = when (state) {
     is VpnState.On -> Palette.Accent
-    is VpnState.Connecting -> Palette.Warn
+    is VpnState.Connecting, is VpnState.Reconnecting -> Palette.Warn
     is VpnState.Failed -> Palette.Error
     VpnState.Off -> Palette.Text3
 }

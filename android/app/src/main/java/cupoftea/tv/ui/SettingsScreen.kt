@@ -144,6 +144,11 @@ fun SettingsScreen(repo: Repository, actions: UiActions) {
             }
         }
 
+        item { SectionTitle("Зимнее оформление") }
+        items(listOf(Season.AUTO to "Само: с декабря по февраль", Season.ALWAYS to "Всегда", Season.NEVER to "Никогда")) { (key, title) ->
+            RadioRow(title, null, selected = settings.winter == key) { repo.updateSettings { it.copy(winter = key) } }
+        }
+
         item { SectionTitle("Обновления") }
         item { UpdateSettings(actions) }
 

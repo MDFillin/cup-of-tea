@@ -19,11 +19,18 @@ class CupApp : Application() {
         val repo = Repository.get(this)
         // Подписки по сроку (profile-update-interval, по умолчанию 12 ч; после ошибки — через 30 мин).
         // Проверка раз в 15 минут, пока жив процесс (а пока включён VPN, он жив всегда).
-        // Обновления программы: через 15 с после запуска (когда поднялись сеть и VPN), потом каждые 3 ч.
+        // Обновления (0.8.0 на ПК): сразу при запуске, а если сети ещё нет (ТВ только включился) — повторы через
+        // 10 с, 30 с и 2 мин; дальше каждые 3 ч.
         repo.scope.launch {
-            delay(15_000)
+            val retries = longArrayOf(10_000, 30_000, 120_000)
+            var attempt = 0
             while (isActive) {
-                cupoftea.tv.update.Updates.check(this@CupApp, notify = true)
+                val result = cupoftea.tv.update.Updates.check(this@CupApp, notify = true)
+                if (result is cupoftea.tv.update.UpdateState.Failed && attempt < retries.size) {
+                    delay(retries[attempt++])
+                    continue
+                }
+                attempt = retries.size
                 delay(3 * 3600_000L)
             }
         }

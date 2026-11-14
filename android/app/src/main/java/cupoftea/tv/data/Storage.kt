@@ -111,6 +111,8 @@ data class AppSettings(
     val coreMemoryMb: Int = 96,
     /** О какой версии уже было уведомление (один раз на версию). */
     val notifiedVersion: String? = null,
+    /** Зимнее оформление: auto (1 декабря – 28 февраля), on, off. */
+    val winter: String = "auto",
 )
 
 class SettingsStore(context: Context) {

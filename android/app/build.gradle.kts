@@ -7,7 +7,7 @@ plugins {
 }
 
 // Версия ТВ-клиента (своя, не как у десктопа); релизы — с тегом tv-v<версия>.
-val tvVersion = "0.1.0"
+val tvVersion = "0.2.0"
 
 // Ключ подписи релизов — вне репозитория: %USERPROFILE%\.cupoftea\keystore.properties и release.jks
 // (scripts\new-release-key.ps1). Потеряете ключ — обновления поверх установленной версии не встанут.
