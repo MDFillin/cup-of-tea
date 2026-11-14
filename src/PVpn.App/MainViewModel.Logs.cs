@@ -71,6 +71,7 @@ public sealed partial class MainViewModel
     partial void OnPageChanged(int value)
     {
         SettingsPage = null;
+        HomeServersOpen = false;
         if (value == LogPage && logDirty)
             TrimAndPublishLogs();
     }

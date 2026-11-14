@@ -80,10 +80,18 @@ public sealed partial class ProfileItem(Profile profile, string? subscription = 
 
 public static class StatusBrushes
 {
-    public static readonly Brush Off = Freeze(0x8A, 0x93, 0xA6);
-    public static readonly Brush Busy = Freeze(0xF5, 0xB5, 0x44);
-    public static readonly Brush On = Freeze(0x34, 0xD3, 0x99);
-    public static readonly Brush Error = Freeze(0xF8, 0x71, 0x71);
+    private static readonly Brush Green = Freeze(0x34, 0xD3, 0x99);
+    private static readonly Brush Ice = Freeze(0x5E, 0xDC, 0xF2);
+
+    public static Brush Off { get; } = Freeze(0x8A, 0x93, 0xA6);
+    public static Brush Busy { get; } = Freeze(0xF5, 0xB5, 0x44);
+
+    /// <summary>«Защищено» и хороший пинг: зелёный, зимой — ледяной (см. <see cref="Themes"/>).</summary>
+    public static Brush On { get; private set; } = Green;
+    public static Brush Error { get; } = Freeze(0xF8, 0x71, 0x71);
+
+    /// <summary>До создания окна: x:Static читает значения при загрузке разметки.</summary>
+    public static void Apply(bool winter) => On = winter ? Ice : Green;
 
     private static Brush Freeze(byte r, byte g, byte b)
     {

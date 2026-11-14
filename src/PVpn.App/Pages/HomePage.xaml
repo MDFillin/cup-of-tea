@@ -7,13 +7,61 @@
              xmlns:local="clr-namespace:PVpn.App"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:MainViewModel}">
+    <UserControl.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding CloseHomeServersCommand}" />
+    </UserControl.InputBindings>
+    <UserControl.Resources>
+        <!-- Строка сервера в выдвижной панели: щелчок — выбрать или переключиться; текущий подсвечен полоской -->
+        <Style x:Key="SheetRow" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="local:Motion.PressScale" Value="0.985" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="Transparent" CornerRadius="9" Padding="12,6">
+                            <Grid>
+                                <Rectangle x:Name="Bar" Width="3" Height="18" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}"
+                                           HorizontalAlignment="Left" Margin="-10,0,0,0" Visibility="Collapsed" />
+                                <ContentPresenter />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface2}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface2}" />
+                            </Trigger>
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <MultiBinding Converter="{x:Static local:SameItem.Instance}">
+                                        <Binding />
+                                        <Binding Path="DataContext.CurrentServer" RelativeSource="{RelativeSource AncestorType=UserControl}" />
+                                    </MultiBinding>
+                                </DataTrigger.Binding>
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface2}" />
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
     <!-- ───────── Главная ───────── -->
-    <Grid local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=0}">
+    <!-- Фон прозрачный, а не пустой: зимой щелчок по пустому месту бросает снежок (пасхалка) -->
+    <Grid x:Name="Root" Background="Transparent" MouseLeftButtonDown="Root_MouseLeftButtonDown"
+          local:Motion.FadeInOnShow="True" Visibility="{Binding Page, Converter={x:Static local:ShowWhen.Instance}, ConverterParameter=0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
+
+        <!-- Зимой — редкий снег за всем содержимым -->
+        <local:Snowfall x:Name="Snow" Grid.RowSpan="3" Visibility="{Binding IsWinter, Converter={StaticResource BoolToVisibility}}" />
 
         <!-- Мягкое свечение цвета состояния за кнопкой -->
         <Ellipse Grid.RowSpan="3" Width="640" Height="520" VerticalAlignment="Top" Margin="0,-40,0,0" IsHitTestVisible="False"
@@ -49,6 +97,9 @@
         </Border>
 
         <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40,0">
+            <!-- Новогоднее поздравление (30 декабря – 8 января) -->
+            <TextBlock Text="{Binding HolidayGreeting}" HorizontalAlignment="Center" Margin="0,0,0,10" FontSize="14" FontWeight="SemiBold"
+                       Foreground="{StaticResource Accent}" Visibility="{Binding HolidayGreeting, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
             <!-- Плашка состояния -->
             <Grid HorizontalAlignment="Center" local:Motion.FadeOnChange="{Binding State}">
                 <Border CornerRadius="14" Background="{Binding StateBrush}" Opacity="0.14" />
@@ -87,8 +138,8 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <DataTrigger Binding="{Binding State}" Value="On">
-                                <Setter TargetName="Ring1" Property="Stroke" Value="#334ADE80" />
-                                <Setter TargetName="Ring2" Property="Stroke" Value="#77A3E635" />
+                                <Setter TargetName="Ring1" Property="Stroke" Value="{StaticResource RingOn1}" />
+                                <Setter TargetName="Ring2" Property="Stroke" Value="{StaticResource RingOn2}" />
                                 <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource OnAccent}" />
                                 <DataTrigger.EnterActions>
                                     <BeginStoryboard>
@@ -227,6 +278,68 @@
             </StackPanel>
         </StackPanel>
 
+        <!-- ── Выдвижная панель: серверы подписки текущего сервера. Щелчок мимо или Esc — закрыть. ── -->
+        <Border Grid.RowSpan="3" Background="Transparent" MouseLeftButtonDown="SheetBackdrop_MouseLeftButtonDown"
+                Visibility="{Binding HomeServersOpen, Converter={StaticResource BoolToVisibility}}" />
+        <Grid Grid.Row="1" VerticalAlignment="Bottom" Margin="40,0,40,8" MaxHeight="360" local:Motion.IsOpen="{Binding HomeServersOpen}">
+        <!-- Тень — отдельным слоем: эффект на самой карточке размыл бы текст -->
+        <Border Style="{StaticResource Card}">
+            <Border.Effect>
+                <DropShadowEffect Color="#000000" BlurRadius="32" ShadowDepth="6" Opacity="0.5" />
+            </Border.Effect>
+        </Border>
+        <Border Style="{StaticResource Card}" Padding="6,6,6,4">
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="10,4,2,8">
+                    <ui:Button DockPanel.Dock="Right" Icon="{ui:SymbolIcon ArrowSync24}" Appearance="Transparent" BorderThickness="0" Padding="7" VerticalAlignment="Center"
+                               Command="{Binding UpdateCurrentSubscriptionCommand}" ToolTip="Обновить подписку: новые серверы, трафик и срок"
+                               AutomationProperties.Name="Обновить подписку"
+                               Visibility="{Binding CurrentSubscription, Converter={x:Static local:NullToCollapsed.Instance}}" />
+                    <ui:Button DockPanel.Dock="Right" Icon="{ui:SymbolIcon Pulse24}" Appearance="Transparent" BorderThickness="0" Padding="7" Margin="0,0,2,0" VerticalAlignment="Center"
+                               Command="{Binding PingCurrentGroupCommand}" ToolTip="Проверить задержку серверов этой группы"
+                               AutomationProperties.Name="Пинг серверов группы" />
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock local:FlagText.Text="{Binding CurrentGroup}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="460" />
+                            <Border CornerRadius="8" Background="{StaticResource Surface3}" Padding="7,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding CurrentGroupCount}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Text2}" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding CurrentSubscription.Summary}" FontSize="12" Foreground="{StaticResource Text3}" Margin="0,2,0,0"
+                                   TextTrimming="CharacterEllipsis" Visibility="{Binding CurrentSubscription, Converter={x:Static local:NullToCollapsed.Instance}}" />
+                    </StackPanel>
+                </DockPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+                    <ItemsControl ItemsSource="{Binding GroupServers}" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:ProfileItem}">
+                                <Button Style="{StaticResource SheetRow}" ToolTip="{Binding Profile.Name}" AutomationProperties.Name="{Binding Name}"
+                                        Command="{Binding DataContext.PickServerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ContentControl Style="{StaticResource Badge}" Content="{Binding Badge}">
+                                            <ContentControl.LayoutTransform><ScaleTransform ScaleX="0.8" ScaleY="0.8" /></ContentControl.LayoutTransform>
+                                        </ContentControl>
+                                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock local:FlagText.Text="{Binding DisplayName}" Style="{StaticResource Title}" FontSize="14" />
+                                            <TextBlock Text="{Binding Details}" FontSize="12" Foreground="{StaticResource Text3}" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" Text="{Binding DelayText}" Foreground="{Binding DelayBrush}" FontSize="13" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" Margin="12,0,2,0" />
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+        </Grid>
+
         <!-- Сервер и цифры -->
         <StackPanel Grid.Row="2" Margin="40,0,40,24">
             <Border Style="{StaticResource Card}" Padding="16,14" DataContext="{Binding CurrentServer}"
@@ -235,6 +348,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
@@ -271,7 +385,28 @@
                         <Ellipse Width="8" Height="8" Fill="{x:Static local:StatusBrushes.On}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding DelayText}" FontSize="15" FontWeight="SemiBold" Foreground="{x:Static local:StatusBrushes.On}" Margin="8,0,0,0" />
                     </StackPanel>
-                    <ui:Button Grid.Column="3" Content="Сменить" VerticalAlignment="Center"
+                    <!-- Серверы этой же подписки — прямо здесь, в выдвижной панели -->
+                    <ui:Button Grid.Column="3" Appearance="Transparent" BorderThickness="0" Padding="10,6" Margin="0,0,6,0" VerticalAlignment="Center"
+                               DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
+                               Command="{Binding ToggleHomeServersCommand}" AutomationProperties.Name="Серверы подписки"
+                               ToolTip="{Binding CurrentGroup}" ToolTipService.InitialShowDelay="600">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding CurrentGroupCount}" Foreground="{StaticResource Text2}" FontSize="13" VerticalAlignment="Center" />
+                            <ui:SymbolIcon FontSize="16" Margin="6,0,0,0" Foreground="{StaticResource Text2}" VerticalAlignment="Center">
+                                <ui:SymbolIcon.Style>
+                                    <Style TargetType="ui:SymbolIcon">
+                                        <Setter Property="Symbol" Value="ChevronUp24" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HomeServersOpen}" Value="True">
+                                                <Setter Property="Symbol" Value="ChevronDown24" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ui:SymbolIcon.Style>
+                            </ui:SymbolIcon>
+                        </StackPanel>
+                    </ui:Button>
+                    <ui:Button Grid.Column="4" Content="Сменить" VerticalAlignment="Center"
                                Command="{Binding DataContext.GoToCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="1"
                                ToolTip="Список серверов" />
                 </Grid>

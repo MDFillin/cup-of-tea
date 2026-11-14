@@ -126,6 +126,9 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+                <!-- Поиск ничего не нашёл (пасхалка: попробуйте найти чай) -->
+                <TextBlock Text="{Binding SearchEmptyText}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="32" Foreground="{StaticResource Text2}"
+                           Visibility="{Binding SearchEmptyText, Converter={x:Static local:EmptyToCollapsed.Instance}}" />
                 <TextBlock Text="Серверов пока нет. Скопируйте ссылки vless:// или hy2:// либо ссылку подписки и нажмите «Вставить ссылки»."
                            TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="32" Foreground="{StaticResource Text2}">
                     <TextBlock.Style>

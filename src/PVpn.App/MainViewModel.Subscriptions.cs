@@ -31,6 +31,23 @@ public sealed class SubscriptionItem(Subscription subscription, int servers)
         }
     }
 
+    /// <summary>Коротко для главной: трафик, срок и когда обновлена (без числа серверов — оно рядом).</summary>
+    public string Summary
+    {
+        get
+        {
+            var s = Subscription;
+            var used = Gb(s.Upload + s.Download);
+            var parts = new List<string>();
+            if (s.Total > 0 || s.Upload + s.Download > 0)
+                parts.Add(s.Total > 0 ? $"{used} из {Gb(s.Total)} ГБ" : $"{used} ГБ");
+            if (s.Expire is { } e)
+                parts.Add(e < DateTimeOffset.Now ? "срок истёк" : $"до {e.LocalDateTime:dd.MM.yyyy}");
+            parts.Add(s.LastUpdated is { } t ? $"обновлена {t.LocalDateTime:dd.MM HH:mm}" : "не обновлялась");
+            return string.Join(" · ", parts);
+        }
+    }
+
     public string? Error => Subscription.LastError is { } e ? $"Не удалось обновить: {e}" : null;
 
     public string? Description => Subscription.Description;
@@ -57,7 +74,7 @@ public sealed partial class MainViewModel
     private string subscriptionUrl = "";
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AddSubscriptionCommand), nameof(UpdateSubscriptionCommand), nameof(UpdateAllSubscriptionsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddSubscriptionCommand), nameof(UpdateSubscriptionCommand), nameof(UpdateAllSubscriptionsCommand), nameof(UpdateCurrentSubscriptionCommand))]
     private bool subscriptionBusy;
 
     private void LoadSubscriptions()

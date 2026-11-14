@@ -125,6 +125,17 @@ public class MiscTests
     }
 
     [Fact]
+    public void WinterThemeStartsOnFirstOfDecemberAndEndsInMarch()
+    {
+        Assert.False(Season.WinterThemeFor(Season.Auto, new DateTime(2026, 11, 30, 23, 59, 0)));
+        Assert.True(Season.WinterThemeFor(Season.Auto, new DateTime(2026, 12, 1, 0, 0, 0)));
+        Assert.True(Season.WinterThemeFor(null, new DateTime(2027, 2, 28)));
+        Assert.False(Season.WinterThemeFor("что-то", new DateTime(2027, 3, 1)));
+        Assert.True(Season.WinterThemeFor(Season.Always, new DateTime(2027, 7, 1)));
+        Assert.False(Season.WinterThemeFor(Season.Never, new DateTime(2026, 12, 25)));
+    }
+
+    [Fact]
     public void AntivirusAdviceSkipsDisabledAndBuiltIn()
     {
         // Значения productState из Центра безопасности: 0x061000/0x041100 — включён, 0x060100/0x040000 — выключен.

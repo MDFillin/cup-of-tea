@@ -32,8 +32,63 @@
                 <Border Background="{StaticResource Side}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="26,22,0,26">
-                            <Image Source="Assets/logo.png" Width="36" Height="36" RenderOptions.BitmapScalingMode="HighQuality" />
-                            <TextBlock Text="{x:Static local:Brand.Name}" FontFamily="{StaticResource Display}" FontSize="20" FontWeight="Bold" Margin="12,0,0,0" VerticalAlignment="Center" />
+                            <!-- Логотип: пять щелчков подряд — пасхалка (MainWindow.xaml.cs) -->
+                            <Grid x:Name="Logo" Width="36" Height="36" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Logo_MouseLeftButtonUp"
+                                  WindowChrome.IsHitTestVisibleInChrome="True"
+                                  RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform><RotateTransform /></Grid.RenderTransform>
+                                <Image Source="Assets/logo.png" RenderOptions.BitmapScalingMode="HighQuality">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsWinter}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
+                                <!-- Зимний логотип: ледяная рамка со снегом, вместо пара — снежинки -->
+                                <Viewbox Visibility="{Binding IsWinter, Converter={StaticResource BoolToVisibility}}">
+                                    <Canvas Width="256" Height="256">
+                                        <Rectangle Canvas.Left="16" Canvas.Top="16" Width="224" Height="224" RadiusX="54" RadiusY="54" Fill="#0B1118" StrokeThickness="14">
+                                            <Rectangle.Stroke>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#7DE3F7" Offset="0" />
+                                                    <GradientStop Color="#A5B4FC" Offset="1" />
+                                                </LinearGradientBrush>
+                                            </Rectangle.Stroke>
+                                        </Rectangle>
+                                        <!-- Чашка и блюдце -->
+                                        <Path Data="M 52,104 H 182 V 122 C 182,176 154,206 117,206 C 80,206 52,176 52,122 Z" Fill="{StaticResource AccentGradient}" />
+                                        <Ellipse Canvas.Left="170" Canvas.Top="110" Width="50" Height="50" StrokeThickness="16" Stroke="#A5B4FC" />
+                                        <Rectangle Canvas.Left="32" Canvas.Top="208" Width="172" Height="14" RadiusX="3" RadiusY="3" Fill="{StaticResource AccentGradient}" />
+                                        <!-- Снежинки вместо пара -->
+                                        <Path Data="M 96,38 V 86 M 75,50 L 117,74 M 75,74 L 117,50" Stroke="#EAF6FF" StrokeThickness="9" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                        <Path Data="M 148,56 V 90 M 133,64 L 163,82 M 133,82 L 163,64" Stroke="#EAF6FF" StrokeThickness="8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.85" />
+                                        <!-- Шапка снега на рамке -->
+                                        <Path Fill="#F4FAFF" Data="M 9,74 C 6,32 30,6 70,6 L 176,6 C 196,6 202,24 190,32 C 178,40 166,32 154,40 C 140,48 128,36 114,44 C 100,52 88,40 74,48 C 60,56 50,46 42,58 C 34,70 34,86 26,92 C 16,98 10,88 9,74 Z" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+                            <Grid Margin="12,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Static local:Brand.Name}" FontFamily="{StaticResource Display}" FontSize="20" FontWeight="Bold" />
+                                <!-- Зимой на названии — новогодний колпак -->
+                                <Canvas Width="30" Height="24" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-9,-15,0,0" IsHitTestVisible="False"
+                                        Visibility="{Binding IsWinter, Converter={StaticResource BoolToVisibility}}" RenderTransformOrigin="0.5,0.8">
+                                    <Canvas.RenderTransform><RotateTransform Angle="-16" /></Canvas.RenderTransform>
+                                    <Path Data="M 4,18 C 6,8 13,2 21,3 C 27,4 30,9 28,15 C 25,11 22,11 20,14 L 21,18 Z">
+                                        <Path.Fill>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#F25555" Offset="0" />
+                                                <GradientStop Color="#C81E2E" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Path.Fill>
+                                    </Path>
+                                    <Rectangle Canvas.Left="1" Canvas.Top="16" Width="23" Height="6" RadiusX="3" RadiusY="3" Fill="#F4FAFF" />
+                                    <Ellipse Canvas.Left="25" Canvas.Top="12" Width="6.5" Height="6.5" Fill="#F4FAFF" />
+                                </Canvas>
+                            </Grid>
                         </StackPanel>
 
                         <!-- Состояние видно с любой страницы -->
@@ -55,7 +110,7 @@
                             </TextBlock>
                             <!-- Авторство: красное сердце текстом — цветные эмодзи WPF не рисует -->
                             <TextBlock FontSize="11" Foreground="{StaticResource Text3}" Margin="4,4,0,0" TextWrapping="NoWrap">
-                                <Run Text="All rights reserved by @kpenkuu4au" /><Run Text=" ♥" Foreground="{StaticResource Heart}" />
+                                <Run Text="All rights reserved by @kpenkuu4au" /><Run Text=" ♥" Foreground="{StaticResource Heart}" ToolTip="Сделано с любовью и литрами чая" />
                             </TextBlock>
                         </StackPanel>
 

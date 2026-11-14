@@ -73,6 +73,7 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(StateLabel));
         OnPropertyChanged(nameof(BigStatus));
         OnPropertyChanged(nameof(CurrentServer));
+        RefreshHomeGroup();
         OnPropertyChanged(nameof(FooterInfo));
     }
 
@@ -120,6 +121,7 @@ public sealed partial class MainViewModel
     {
         ProfilesView.Refresh();
         GroupsVersion++;
+        OnPropertyChanged(nameof(SearchEmptyText));
     }
 
     /// <summary>Меняется при сворачивании групп и поиске: по нему заголовки групп перечитывают своё состояние.</summary>

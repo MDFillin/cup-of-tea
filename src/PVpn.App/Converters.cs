@@ -79,6 +79,17 @@ public sealed class GroupExpanded : IMultiValueConverter
     public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
+/// <summary>Два значения — один и тот же объект (сервер в списке — текущий).</summary>
+public sealed class SameItem : IMultiValueConverter
+{
+    public static readonly SameItem Instance = new();
+
+    public object Convert(object?[] values, Type targetType, object? parameter, CultureInfo culture) =>
+        values is [{ } a, { } b, ..] && ReferenceEquals(a, b);
+
+    public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 /// <summary>Заголовок страницы настроек по её имени.</summary>
 public sealed class SettingsTitle : IValueConverter
 {

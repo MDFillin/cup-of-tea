@@ -94,6 +94,9 @@ public sealed class AppSettings
     /// <summary>Свёрнутые группы в списке серверов (имя подписки или «Свои»).</summary>
     public List<string> CollapsedGroups { get; set; } = [];
 
+    /// <summary>Зимнее оформление: auto (с 1 декабря по февраль), on, off — см. PVpn.Core.Season.</summary>
+    public string WinterTheme { get; set; } = "auto";
+
     /// <summary>Пинг серверов при запуске и после обновления подписки.</summary>
     public bool AutoPing { get; set; } = true;
 

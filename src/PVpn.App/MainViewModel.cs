@@ -238,6 +238,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         TunStack = TunStackChoices.Contains(settings.TunStack) ? settings.TunStack : "gvisor";
         Notifications = settings.Notifications;
         HotkeyText = settings.Hotkey;
+        WinterMode = WinterChoices.Any(c => c.Key == settings.WinterTheme) ? settings.WinterTheme : Season.Auto;
         StartWithWindows = Registry.CurrentUser.OpenSubKey(AutostartKey)?.GetValue(Product.Id) != null;
         LoadRoutingSettings();
         loadingSettings = false;

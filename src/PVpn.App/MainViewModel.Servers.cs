@@ -46,6 +46,7 @@ public sealed partial class MainViewModel
             Profiles.Add(auto);
         SelectedProfile = Profiles.FirstOrDefault(p => p.Profile.Id == selectedId) ?? Profiles.FirstOrDefault();
         LoadSubscriptions();
+        RefreshHomeGroup();
     }
 
     /// <summary>
@@ -84,6 +85,7 @@ public sealed partial class MainViewModel
     private void OnSelectedProfileChangedCore(ProfileItem? value)
     {
         OnPropertyChanged(nameof(CurrentServer));
+        RefreshHomeGroup();
         UpdateAnnounce();
         if (value == null || data.SelectedId == value.Profile.Id)
             return;
@@ -285,16 +287,18 @@ public sealed partial class MainViewModel
 
     /// <summary>Сколько серверов проверяется одновременно (у каждого свой временный xray).</summary>
     private const int ParallelDelayChecks = 4;
-    private bool checkingDelays;
 
     /// <summary>
     /// Настоящая задержка: временный xray и запрос generate_204 через сервер (как у браузера).
     /// Серверы проверяются по несколько сразу: по одному подписка на 20 серверов проверялась бы минуты.
     /// </summary>
     [RelayCommand]
-    private async Task CheckDelaysAsync()
+    private Task CheckDelaysAsync() => CheckDelaysForAsync(Profiles.ToList());
+
+    /// <param name="items">Какие серверы проверить (на главной — только группу текущего).</param>
+    private async Task CheckDelaysForAsync(List<ProfileItem> items)
     {
-        if (checkingDelays)
+        if (IsPinging || items.Count == 0)
             return;
         CorePaths cores;
         try
@@ -306,8 +310,7 @@ public sealed partial class MainViewModel
             Notice = e.Message;
             return;
         }
-        checkingDelays = true;
-        var items = Profiles.ToList();
+        IsPinging = true;
         foreach (var item in items)
             item.Checking = true;
         try
@@ -339,7 +342,7 @@ public sealed partial class MainViewModel
             foreach (var item in items)
                 item.Checking = false;
             ShowAutoDelays();
-            checkingDelays = false;
+            IsPinging = false;
         }
     }
 

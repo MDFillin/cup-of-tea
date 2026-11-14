@@ -194,6 +194,17 @@
                         <Border Style="{StaticResource Separator}" />
                         <Grid Style="{StaticResource Row}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="WeatherSnowflake24" FontSize="18" /></ContentControl>
+                            <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
+                                <TextBlock Text="Зимнее оформление" Style="{StaticResource Title}" />
+                                <TextBlock Text="Холодные цвета и тихий снег на главной." Style="{StaticResource Sub}" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="2" MinWidth="230" VerticalAlignment="Center" AutomationProperties.Name="Зимнее оформление"
+                                      ItemsSource="{Binding WinterChoices}" DisplayMemberPath="Title" SelectedValuePath="Key" SelectedValue="{Binding WinterMode}" />
+                        </Grid>
+                        <Border Style="{StaticResource Separator}" />
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <ContentControl Style="{StaticResource IconBox}"><ui:SymbolIcon Symbol="Keyboard24" FontSize="18" /></ContentControl>
                             <StackPanel Grid.Column="1" Margin="14,10" VerticalAlignment="Center">
                                 <TextBlock Text="Горячая клавиша" Style="{StaticResource Title}" />

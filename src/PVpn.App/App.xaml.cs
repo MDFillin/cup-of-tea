@@ -38,14 +38,19 @@ public partial class App : Application
             Shutdown();
             return;
         }
-        // Только тёмная тема; акцент — свой зелёный, а не цвет Windows.
+        // Только тёмная тема; акцент — свой (зелёный, зимой ледяной), а не цвет Windows.
         ApplicationThemeManager.Apply(ApplicationTheme.Dark);
-        // Тёмная тема WPF-UI сама осветляет акцент: задаём оттенки явно, чтобы кнопки и переключатели были того же зелёного.
-        var accent = (Color)FindResource("AccentColor");
-        ApplicationAccentColorManager.Apply(accent, Color.FromRgb(0x2B, 0xB9, 0x88), accent, Color.FromRgb(0x6E, 0xE7, 0xB7));
 
         vm = new MainViewModel { SnapshotMode = snapshot != null };
+        // Снимок окна в нужном оформлении: --winter / --summer.
+        if (snapshot != null && (e.Args.Contains("--winter") || e.Args.Contains("--summer")))
+            vm.SeasonOverride = e.Args.Contains("--winter");
         await vm.InitializeAsync();
+        if (snapshot != null && e.Args.Contains("--home-servers"))
+            vm.HomeServersOpen = true;
+        // Оформление — до первого окна: стили читают цвета один раз, при создании.
+        ApplySeason();
+        vm.WinterModeChanged += ReopenWithSeason;
 
         if (snapshot != null)
         {
@@ -191,10 +196,44 @@ public partial class App : Application
     {
         if (window != null)
             return window;
+        // Программа неделями живёт в трее: 1 декабря зимнее оформление появится в следующем открытом окне.
+        ApplySeason();
         window = new MainWindow(vm!);
         MainWindow = window;
         window.HiddenToTray += OnHiddenToTray;
         return window;
+    }
+
+    private void ApplySeason()
+    {
+        if (vm == null)
+            return;
+        Themes.Apply(this, vm.WantsWinter);
+        vm.IsWinter = Themes.Winter == true;
+    }
+
+    /// <summary>Оформление сменили в настройках: окно открывается заново (на том же месте и той же странице).</summary>
+    private void ReopenWithSeason()
+    {
+        if (vm == null || exiting || Themes.Winter == vm.WantsWinter)
+            return;
+        if (window is not { } old)
+        {
+            ApplySeason();
+            return;
+        }
+        var (left, top, width, height, maximized, visible) = (old.Left, old.Top, old.Width, old.Height, old.WindowState == WindowState.Maximized, old.IsVisible);
+        window = null;
+        old.HiddenToTray -= OnHiddenToTray;
+        old.AllowClose = true;
+        var w = EnsureWindow();
+        w.WindowStartupLocation = WindowStartupLocation.Manual;
+        (w.Left, w.Top, w.Width, w.Height) = (left, top, width, height);
+        if (maximized)
+            w.WindowState = WindowState.Maximized;
+        if (visible)
+            ShowMainWindow();
+        old.Close();
     }
 
     private void OnHiddenToTray()

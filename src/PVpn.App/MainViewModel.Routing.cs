@@ -385,6 +385,10 @@ public sealed partial class MainViewModel
             live.LiveSortingProperties.Add(nameof(ProfileItem.SortDelay));
             live.IsLiveSorting = ServerSort == "ping";
         }
+        if (groupServers != null)
+        {
+            SortLikeServerList(groupServers);
+        }
     }
 
     /// <summary>Пинг после запуска и после обновления подписки, если включено (как «автоматический пинг»).</summary>
