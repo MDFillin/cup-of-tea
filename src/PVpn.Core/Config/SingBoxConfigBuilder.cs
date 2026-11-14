@@ -55,6 +55,9 @@ public static class SingBoxConfigBuilder
     public const string TunAddress4 = "172.18.79.1/30";
     public const string TunAddress6 = "fdfe:dcba:7979::1/126";
 
+    /// <summary>DNS-сервер, который sing-box назначает адаптеру TUN (следующий адрес после <see cref="TunAddress4"/>).</summary>
+    public const string TunDns4 = "172.18.79.2";
+
     /// <summary>
     /// QUIC режется только у серверов поверх TCP (VLESS): там UDP идёт внутри TCP-соединения и тормозит, браузеру
     /// лучше сразу уйти на TCP. Hysteria2 сама работает по UDP и пропускает QUIC без потерь — резать его незачем:

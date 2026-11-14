@@ -173,7 +173,38 @@ internal sealed class TunSession
 
         progress("Поднимаю TUN");
         await StartSingBoxAsync(ct).ConfigureAwait(false);
+        SetDnsPolicy();
         DnsCache.Flush();
+    }
+
+    /// <summary>Пока поднят TUN, Windows спрашивает имена только у DNS туннеля (см. <see cref="DnsPolicy"/>).</summary>
+    private void SetDnsPolicy()
+    {
+        try
+        {
+            StateJournal.Update(j => j with { DnsPolicy = true });
+            DnsPolicy.Set([SingBoxConfigBuilder.TunDns4]);
+            log.Info($"Правило DNS: все имена — через DNS туннеля ({SingBoxConfigBuilder.TunDns4})");
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            // Без правила всё работает, как раньше; на части компьютеров первое открытие сайтов будет медленным.
+            log.Info($"Правило DNS не поставлено: {e.Message}");
+        }
+    }
+
+    private void ClearDnsPolicy()
+    {
+        try
+        {
+            if (DnsPolicy.Clear())
+                log.Info("Правило DNS снято");
+            StateJournal.Update(j => j with { DnsPolicy = false });
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            log.Info($"Правило DNS не снято: {e.Message}");
+        }
     }
 
     private async Task ProbeServerAsync(Action<string> progress, CancellationToken ct)
@@ -392,6 +423,8 @@ internal sealed class TunSession
     {
         var sw = Stopwatch.StartNew();
         ResetProbe();
+        // Первым делом: DNS туннеля сейчас исчезнет, и правило оставило бы Windows без имён.
+        ClearDnsPolicy();
         var graceful = quick ? TimeSpan.FromSeconds(1.5) : (TimeSpan?)null;
         // Ядра останавливаются одновременно: каждому даётся время на штатную остановку.
         await Task.WhenAll(

@@ -22,7 +22,7 @@ internal static class Recovery
         var restored = KillOrphanCores(cores, log);
 
         var journal = StateJournal.Load();
-        restored |= journal.Routes.Count > 0 || journal.KillSwitch;
+        restored |= journal.Routes.Count > 0 || journal.KillSwitch || journal.DnsPolicy;
         foreach (var route in journal.Routes)
         {
             try
@@ -67,6 +67,20 @@ internal static class Recovery
             {
                 log.Info($"Восстановление: kill switch не снят: {e.Message}");
             }
+        }
+
+        // Правило DNS ищется по своему разделу реестра, а не по журналу: DNS туннеля больше нет, с правилом имена не открываются.
+        try
+        {
+            if (DnsPolicy.Clear())
+            {
+                restored = true;
+                log.Info("Восстановление: снято правило DNS");
+            }
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            log.Info($"Восстановление: правило DNS не снято: {e.Message}");
         }
 
         if (!WaitAdapterGone(TunSession.InterfaceName, TimeSpan.FromSeconds(5)))

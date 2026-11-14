@@ -7,6 +7,7 @@ internal sealed record JournalData
 {
     public List<HostRoute> Routes { get; init; } = [];
     public bool KillSwitch { get; init; }
+    public bool DnsPolicy { get; init; }
     public string? Profile { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
 }
